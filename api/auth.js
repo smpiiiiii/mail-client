@@ -66,7 +66,7 @@ module.exports = async (req, res) => {
 
     // コード検証
     const savedCode = await redis.get(`mail:verify:${email}`);
-    if (!savedCode || savedCode !== code) {
+    if (!savedCode || String(savedCode) !== String(code)) {
       return res.status(400).json({ error: '認証コードが正しくありません。再度送信してください。' });
     }
 
@@ -161,7 +161,7 @@ module.exports = async (req, res) => {
     }
 
     const savedCode = await redis.get(`mail:reset:${email}`);
-    if (!savedCode || savedCode !== code) {
+    if (!savedCode || String(savedCode) !== String(code)) {
       return res.status(400).json({ error: 'リセットコードが正しくありません' });
     }
 
