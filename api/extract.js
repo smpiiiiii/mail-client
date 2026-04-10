@@ -19,7 +19,12 @@ module.exports = async (req, res) => {
   const user = getUser(req);
   if (!user) return res.status(401).json({ error: '認証が必要です' });
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  let body;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+  } catch {
+    return res.status(400).json({ error: 'リクエスト形式が不正です' });
+  }
   const { emailId } = body;
 
   const redis = getRedis();
@@ -38,7 +43,12 @@ module.exports = async (req, res) => {
     let result = null;
 
     // --- 添付ファイル解析（PDF/画像） ---
-    const attachments = JSON.parse(email.attachments || '[]');
+    let attachments = [];
+    try {
+      attachments = typeof email.attachments === 'string' 
+        ? JSON.parse(email.attachments) 
+        : (email.attachments || []);
+    } catch { attachments = []; }
     const hasDocAttachment = attachments.some(a =>
       a.contentType?.includes('pdf') ||
       a.contentType?.includes('image/png') ||

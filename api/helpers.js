@@ -111,9 +111,23 @@ async function callGemini(apiKey, prompt, files = []) {
   }
 
   const data = await res.json();
-  let text = data.candidates[0].content.parts[0].text;
-  text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  return JSON.parse(text);
+  try {
+    // レスポンス構造: candidates[0].content.parts にテキストとthinking両方が含まれる場合がある
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    // textパートだけを取得（thinkingパートを除外）
+    let text = '';
+    for (const part of parts) {
+      if (part.text) text = part.text;
+    }
+    if (!text) {
+      throw new Error('Geminiからテキストレスポンスがありません');
+    }
+    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('Geminiレスポンスパースエラー:', e.message, JSON.stringify(data).substring(0, 500));
+    throw new Error(`AI解析結果のパースに失敗: ${e.message}`);
+  }
 }
 
 // --- CORS ヘッダー ---
