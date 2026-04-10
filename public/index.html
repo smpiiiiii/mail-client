@@ -3,8 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>📧 MailExtract - メール書類抽出</title>
   <meta name="description" content="メールから請求書・領収書をAIで自動抽出するメールクライアント">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -1553,6 +1558,12 @@ function formatBytes(bytes) {
   if (!bytes || bytes < 1024) return `${bytes || 0}B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / 1048576).toFixed(1)}MB`;
+}
+</script>
+<script>
+// Service Worker登録
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 </script>
 </body>
