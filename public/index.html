@@ -1174,7 +1174,6 @@ async function addAccount() {
 }
 
 async function deleteAccount(id) {
-  if (!confirm('このアカウントを削除しますか？')) return;
   try {
     await api('accounts', { method: 'POST', body: { action: 'delete', accountId: id } });
     toast('アカウントを削除しました', 'success');
