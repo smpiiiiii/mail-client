@@ -142,4 +142,44 @@ function genId() {
   return crypto.randomBytes(12).toString('hex');
 }
 
-module.exports = { getRedis, signToken, verifyToken, getUser, encrypt, decrypt, callGemini, cors, genId };
+// --- メール送信（SMTP via nodemailer） ---
+const nodemailer = require('nodemailer');
+
+let transporter;
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+  }
+  return transporter;
+}
+
+/**
+ * メール送信
+ * @param {string} to - 送信先メールアドレス
+ * @param {string} subject - 件名
+ * @param {string} html - HTML本文
+ */
+async function sendEmail(to, subject, html) {
+  const t = getTransporter();
+  await t.sendMail({
+    from: `"MailExtract" <${process.env.SMTP_EMAIL}>`,
+    to,
+    subject,
+    html
+  });
+}
+
+/** 6桁の認証コード生成 */
+function genCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+module.exports = { getRedis, signToken, verifyToken, getUser, encrypt, decrypt, callGemini, cors, genId, sendEmail, genCode };

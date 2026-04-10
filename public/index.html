@@ -697,13 +697,14 @@
     </div>
 
     <div class="login-error" id="loginError"></div>
+    <div id="loginSuccess" style="display:none;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;color:#10b981;font-size:0.85rem;margin-bottom:16px;"></div>
 
     <form class="login-form" id="loginForm">
       <div class="field">
         <label class="label">メールアドレス</label>
         <input class="input" type="email" id="loginEmail" placeholder="you@example.com" required>
       </div>
-      <div class="field">
+      <div class="field" id="passwordField">
         <label class="label">パスワード</label>
         <div style="position:relative;">
           <input class="input" type="password" id="loginPassword" placeholder="パスワード" required style="padding-right:44px;">
@@ -717,13 +718,42 @@
           <span id="togglePwConfirm" onclick="togglePasswordVisibility('loginPasswordConfirm','togglePwConfirm')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1.1rem;opacity:0.5;user-select:none;">👁️</span>
         </div>
       </div>
+      <div class="field" id="verifyCodeField" style="display:none;">
+        <label class="label">認証コード（メールで届いた6桁）</label>
+        <input class="input" type="text" id="verifyCode" placeholder="123456" maxlength="6" style="text-align:center;font-size:1.4rem;letter-spacing:6px;">
+      </div>
       <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" type="submit" id="loginBtn">
         ログイン
       </button>
     </form>
 
+    <form class="login-form" id="resetForm" style="display:none;">
+      <div class="field" id="resetEmailField">
+        <label class="label">登録メールアドレス</label>
+        <input class="input" type="email" id="resetEmail" placeholder="you@example.com">
+      </div>
+      <div class="field" id="resetCodeField" style="display:none;">
+        <label class="label">リセットコード（6桁）</label>
+        <input class="input" type="text" id="resetCode" placeholder="123456" maxlength="6" style="text-align:center;font-size:1.4rem;letter-spacing:6px;">
+      </div>
+      <div class="field" id="resetNewPwField" style="display:none;">
+        <label class="label">新しいパスワード</label>
+        <div style="position:relative;">
+          <input class="input" type="password" id="resetNewPassword" placeholder="6文字以上" style="padding-right:44px;">
+          <span id="toggleResetPw" onclick="togglePasswordVisibility('resetNewPassword','toggleResetPw')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1.1rem;opacity:0.5;user-select:none;">👁️</span>
+        </div>
+      </div>
+      <div class="field" id="resetNewPwConfirmField" style="display:none;">
+        <label class="label">新しいパスワード（確認）</label>
+        <input class="input" type="password" id="resetNewPasswordConfirm" placeholder="もう一度入力">
+      </div>
+      <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" type="submit" id="resetBtn">
+        リセットコードを送信
+      </button>
+    </form>
+
     <div style="text-align:center;margin-top:12px;" id="forgotPwLink">
-      <a href="#" onclick="showForgotPassword()" style="font-size:0.8rem;color:var(--text-muted);">パスワードを忘れた方はこちら</a>
+      <a href="#" onclick="showResetMode()" style="font-size:0.8rem;color:var(--text-muted);">パスワードを忘れた方はこちら</a>
     </div>
 
     <div class="login-toggle">
@@ -1031,77 +1061,196 @@ function togglePasswordVisibility(inputId, toggleId) {
   }
 }
 
-// パスワード忘れ
-function showForgotPassword() {
-  const errorEl = document.getElementById('loginError');
-  errorEl.innerHTML = '⚠️ パスワードリセット機能は現在準備中です。<br>管理者にお問い合わせください。';
-  errorEl.style.display = 'block';
-  errorEl.style.background = 'rgba(245,158,11,0.1)';
-  errorEl.style.borderColor = 'rgba(245,158,11,0.3)';
-  errorEl.style.color = '#f59e0b';
+let registerStep = 0; // 0=メール＆PW入力, 1=コード入力
+let resetStep = 0;    // 0=メール入力, 1=コード＆新PW
+
+function showError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.background = '';
+  el.style.borderColor = '';
+  el.style.color = '';
+}
+function showSuccess(msg) {
+  const el = document.getElementById('loginSuccess');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideMessages() {
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginSuccess').style.display = 'none';
 }
 
 function toggleAuthMode() {
   isRegisterMode = !isRegisterMode;
-  document.getElementById('loginBtn').textContent = isRegisterMode ? '新規登録' : 'ログイン';
+  registerStep = 0;
+  hideMessages();
+  // フォーム切替
+  document.getElementById('loginForm').style.display = '';
+  document.getElementById('resetForm').style.display = 'none';
+  // ボタンテキスト
+  document.getElementById('loginBtn').textContent = isRegisterMode ? '認証コードを送信' : 'ログイン';
   document.getElementById('loginToggleText').textContent = isRegisterMode ? '既にアカウントをお持ちの方は' : 'アカウントをお持ちでない方は';
   document.getElementById('loginToggleLink').textContent = isRegisterMode ? 'ログイン' : '新規登録';
-  document.getElementById('loginError').style.display = 'none';
-  // パスワード確認欄の表示切替
+  // 表示制御
   document.getElementById('confirmPwField').style.display = isRegisterMode ? 'block' : 'none';
-  document.getElementById('loginPasswordConfirm').required = isRegisterMode;
-  // パスワード忘れリンクの表示切替（登録モードでは非表示）
+  document.getElementById('verifyCodeField').style.display = 'none';
   document.getElementById('forgotPwLink').style.display = isRegisterMode ? 'none' : 'block';
 }
 
+function showResetMode() {
+  resetStep = 0;
+  hideMessages();
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('resetForm').style.display = '';
+  document.getElementById('forgotPwLink').style.display = 'none';
+  document.getElementById('resetCodeField').style.display = 'none';
+  document.getElementById('resetNewPwField').style.display = 'none';
+  document.getElementById('resetNewPwConfirmField').style.display = 'none';
+  document.getElementById('resetBtn').textContent = 'リセットコードを送信';
+  document.getElementById('loginToggleText').textContent = '';
+  document.getElementById('loginToggleLink').textContent = 'ログインに戻る';
+}
+
+// ---- ログイン / 登録フォーム ----
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('loginEmail').value;
   const password = document.getElementById('loginPassword').value;
   const btn = document.getElementById('loginBtn');
-  const errorEl = document.getElementById('loginError');
+  hideMessages();
 
-  // 新規登録時: パスワード確認チェック
-  if (isRegisterMode) {
-    const confirm = document.getElementById('loginPasswordConfirm').value;
-    if (password !== confirm) {
-      errorEl.textContent = 'パスワードが一致しません';
-      errorEl.style.display = 'block';
-      errorEl.style.background = '';
-      errorEl.style.borderColor = '';
-      errorEl.style.color = '';
-      return;
+  if (!isRegisterMode) {
+    // ---- ログイン ----
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const data = await api('auth', { method: 'POST', body: { action: 'login', email, password } });
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('mail_token', authToken);
+      localStorage.setItem('mail_user', JSON.stringify(currentUser));
+      enterApp();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'ログイン';
     }
-    if (password.length < 6) {
-      errorEl.textContent = 'パスワードは6文字以上にしてください';
-      errorEl.style.display = 'block';
-      return;
-    }
+    return;
   }
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
-  errorEl.style.display = 'none';
+  // ---- 新規登録: ステップ1 → コード送信 ----
+  if (registerStep === 0) {
+    const confirm = document.getElementById('loginPasswordConfirm').value;
+    if (password !== confirm) { showError('パスワードが一致しません'); return; }
+    if (password.length < 6) { showError('パスワードは6文字以上にしてください'); return; }
 
-  try {
-    const data = await api('auth', {
-      method: 'POST',
-      body: { action: isRegisterMode ? 'register' : 'login', email, password }
-    });
-    authToken = data.token;
-    currentUser = data.user;
-    localStorage.setItem('mail_token', authToken);
-    localStorage.setItem('mail_user', JSON.stringify(currentUser));
-    enterApp();
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.style.display = 'block';
-    errorEl.style.background = '';
-    errorEl.style.borderColor = '';
-    errorEl.style.color = '';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = isRegisterMode ? '新規登録' : 'ログイン';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 送信中...';
+    try {
+      await api('auth', { method: 'POST', body: { action: 'send-code', email } });
+      showSuccess('✉️ 認証コードをメールに送信しました。確認してください。');
+      registerStep = 1;
+      document.getElementById('verifyCodeField').style.display = 'block';
+      btn.textContent = '認証して登録';
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      if (registerStep === 0) btn.textContent = '認証コードを送信';
+    }
+    return;
+  }
+
+  // ---- 新規登録: ステップ2 → 認証コード確認＋登録 ----
+  if (registerStep === 1) {
+    const code = document.getElementById('verifyCode').value;
+    if (!code || code.length !== 6) { showError('6桁の認証コードを入力してください'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 登録中...';
+    try {
+      const data = await api('auth', { method: 'POST', body: { action: 'register', email, password, code } });
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('mail_token', authToken);
+      localStorage.setItem('mail_user', JSON.stringify(currentUser));
+      enterApp();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '認証して登録';
+    }
+  }
+});
+
+// ---- パスワードリセットフォーム ----
+document.getElementById('resetForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('resetBtn');
+  hideMessages();
+
+  if (resetStep === 0) {
+    // ステップ1: リセットコード送信
+    const email = document.getElementById('resetEmail').value;
+    if (!email) { showError('メールアドレスを入力してください'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 送信中...';
+    try {
+      await api('auth', { method: 'POST', body: { action: 'send-reset', email } });
+      showSuccess('✉️ リセットコードを送信しました。メールを確認してください。');
+      resetStep = 1;
+      document.getElementById('resetCodeField').style.display = 'block';
+      document.getElementById('resetNewPwField').style.display = 'block';
+      document.getElementById('resetNewPwConfirmField').style.display = 'block';
+      btn.textContent = 'パスワードを再設定';
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      if (resetStep === 0) btn.textContent = 'リセットコードを送信';
+    }
+    return;
+  }
+
+  if (resetStep === 1) {
+    // ステップ2: コード＋新PW設定
+    const email = document.getElementById('resetEmail').value;
+    const code = document.getElementById('resetCode').value;
+    const pw = document.getElementById('resetNewPassword').value;
+    const pwConfirm = document.getElementById('resetNewPasswordConfirm').value;
+
+    if (!code || code.length !== 6) { showError('6桁のリセットコードを入力してください'); return; }
+    if (pw.length < 6) { showError('パスワードは6文字以上にしてください'); return; }
+    if (pw !== pwConfirm) { showError('パスワードが一致しません'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const data = await api('auth', { method: 'POST', body: { action: 'reset-password', email, code, password: pw } });
+      showSuccess('✅ ' + data.message);
+      // ログインモードに戻す
+      setTimeout(() => {
+        isRegisterMode = false;
+        registerStep = 0;
+        resetStep = 0;
+        document.getElementById('loginForm').style.display = '';
+        document.getElementById('resetForm').style.display = 'none';
+        document.getElementById('forgotPwLink').style.display = 'block';
+        document.getElementById('loginBtn').textContent = 'ログイン';
+        document.getElementById('loginToggleText').textContent = 'アカウントをお持ちでない方は';
+        document.getElementById('loginToggleLink').textContent = '新規登録';
+      }, 2000);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'パスワードを再設定';
+    }
   }
 });
 
