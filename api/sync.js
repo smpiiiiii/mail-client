@@ -43,37 +43,37 @@ module.exports = async (req, res) => {
 
     const lock = await client.getMailboxLock('INBOX');
     let synced = 0;
-    const BATCH_SIZE = 10; // 初回は少なめに。Vercel 60秒タイムアウト対策
+    const BATCH_SIZE = 20; // 1回の同期で取得する最大件数
     const startTime = Date.now();
-    const TIMEOUT_MS = 40000; // 40秒で切り上げ（タイムアウト余裕）
+    const TIMEOUT_MS = 40000; // 40秒で切り上げ
 
     try {
-      // 最後に同期したUID以降の新着メールを取得
       const lastUid = parseInt(account.lastSyncedUid) || 0;
-      let range;
+      let maxUid = lastUid;
+
+      // fetchのイテレータ（初回 vs 差分で分ける）
+      let fetchIterator;
       if (lastUid > 0) {
-        range = `${lastUid + 1}:*`;
+        // 2回目以降: UIDベースで差分取得
+        fetchIterator = client.fetch(`${lastUid + 1}:*`, {
+          uid: true, envelope: true, bodyStructure: true
+        }, { uid: true });
       } else {
-        // 初回: メールボックスの総数を確認し、最新10件のみ取得
-        const status = client.mailbox;
-        const total = status.exists || 0;
+        // 初回: シーケンス番号で最新20件（uid:falseでシーケンス番号として解釈）
+        const total = client.mailbox.exists || 0;
         if (total === 0) {
           lock.release();
           await client.logout();
           return res.json({ success: true, synced: 0, message: '受信箱にメールがありません' });
         }
-        const startSeq = Math.max(1, total - 9); // 最新10件
-        range = `${startSeq}:*`;
+        const startSeq = Math.max(1, total - 19);
+        fetchIterator = client.fetch(`${startSeq}:*`, {
+          uid: true, envelope: true, bodyStructure: true
+        });
+        // ※ 第3引数なし = シーケンス番号として解釈
       }
 
-      let maxUid = lastUid;
-
-      // envelope（ヘッダー）のみ取得 — sourceは取得しない（高速化）
-      for await (const msg of client.fetch(range, {
-        uid: true,
-        envelope: true,
-        bodyStructure: true
-      }, { uid: true })) {
+      for await (const msg of fetchIterator) {
         // タイムアウトチェック
         if (Date.now() - startTime > TIMEOUT_MS) break;
         if (synced >= BATCH_SIZE) break;
