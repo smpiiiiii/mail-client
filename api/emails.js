@@ -10,6 +10,12 @@ const { simpleParser } = require('mailparser');
 // メール本文取得にIMAP再接続が必要なため60秒に延長
 module.exports.maxDuration = 60;
 
+/** 安全なJSONパース */
+function safeParse(str, fallback = []) {
+  if (!str) return fallback;
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
 module.exports = async (req, res) => {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -84,7 +90,7 @@ module.exports = async (req, res) => {
         hasAttachment: email.hasAttachment === '1',
         isRead: true,
         extracted: email.extracted === '1',
-        attachments: JSON.parse(email.attachments || '[]')
+        attachments: safeParse(email.attachments, [])
       }
     });
   }
@@ -121,7 +127,7 @@ module.exports = async (req, res) => {
         isRead: email.isRead === '1',
         extracted: email.extracted === '1',
         docId: email.docId || null,
-        attachments: JSON.parse(email.attachments || '[]')
+        attachments: safeParse(email.attachments, [])
       });
     }
   }

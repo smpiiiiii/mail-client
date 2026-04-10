@@ -50,8 +50,21 @@ module.exports = async (req, res) => {
     try {
       // 最後に同期したUID以降の新着メールを取得
       const lastUid = parseInt(account.lastSyncedUid) || 0;
-      // 初回同期: 最新メールのみ取得（*は最新から）
-      const range = lastUid > 0 ? `${lastUid + 1}:*` : '*';
+      let range;
+      if (lastUid > 0) {
+        range = `${lastUid + 1}:*`;
+      } else {
+        // 初回: メールボックスの総数を確認し、最新10件のみ取得
+        const status = client.mailbox;
+        const total = status.exists || 0;
+        if (total === 0) {
+          lock.release();
+          await client.logout();
+          return res.json({ success: true, synced: 0, message: '受信箱にメールがありません' });
+        }
+        const startSeq = Math.max(1, total - 9); // 最新10件
+        range = `${startSeq}:*`;
+      }
 
       let maxUid = lastUid;
 
