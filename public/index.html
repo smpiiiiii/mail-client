@@ -672,15 +672,92 @@
 
     /* === レスポンシブ === */
     @media (max-width: 768px) {
-      .sidebar { width: var(--sidebar-collapsed); }
-      .sidebar:hover { width: var(--sidebar-collapsed); }
-      .sidebar .nav-item .text,
-      .sidebar .nav-badge,
-      .sidebar-brand span { display: none; }
+      /* サイドバー → ボトムナビ */
+      .sidebar {
+        width: 100% !important;
+        height: 56px;
+        flex-direction: row;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        z-index: 300;
+        border-top: 1px solid var(--border);
+        border-right: none;
+      }
+      .sidebar:hover { width: 100% !important; }
+      .sidebar-brand { display: none; }
+      .sidebar-nav {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        width: 100%;
+        padding: 0;
+      }
+      .sidebar .nav-item {
+        flex-direction: column;
+        padding: 6px 0;
+        border-radius: 0;
+        font-size: 0.7rem;
+        gap: 2px;
+      }
+      .sidebar .nav-item .icon { font-size: 1.2rem; }
+      .sidebar .nav-item .text { display: block; opacity: 1; font-size: 0.65rem; }
+      .sidebar .nav-badge { display: none; }
+      .sidebar-footer { display: none; }
+
+      /* メインコンテンツ */
+      #appView {
+        padding-bottom: 60px; /* ボトムナビ分 */
+      }
+      .main-content {
+        margin-left: 0 !important;
+      }
+
+      /* ヘッダーバー */
+      .header-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 12px;
+        gap: 8px;
+      }
+      .header-bar h2 { font-size: 1rem; }
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+      }
+      .header-actions .input {
+        flex: 1;
+        min-width: 100px;
+        font-size: 0.78rem !important;
+      }
+      .header-actions .btn {
+        flex: 1;
+        min-width: 100px;
+        font-size: 0.78rem;
+        padding: 8px 10px;
+        justify-content: center;
+      }
+
+      /* メール一覧 */
       .email-list { width: 100%; min-width: 0; }
       .email-preview-pane { display: none; }
-      .email-preview-pane.has-email { display: flex; position: fixed; inset: 0; z-index: 200; background: var(--bg-deepest); }
+      .email-preview-pane.has-email {
+        display: flex; position: fixed; inset: 0;
+        z-index: 200; background: var(--bg-deepest);
+        bottom: 56px; /* ボトムナビ分 */
+      }
+
+      /* 書類テーブル横スクロール */
+      .doc-table-wrap { overflow-x: auto; }
+
+      /* 統計カード */
       .stats-grid { grid-template-columns: 1fr; }
+
+      /* 設定ページ */
+      .account-card { padding: 12px; }
     }
   </style>
 </head>
