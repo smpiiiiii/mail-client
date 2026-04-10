@@ -705,12 +705,26 @@
       </div>
       <div class="field">
         <label class="label">パスワード</label>
-        <input class="input" type="password" id="loginPassword" placeholder="パスワード" required>
+        <div style="position:relative;">
+          <input class="input" type="password" id="loginPassword" placeholder="パスワード" required style="padding-right:44px;">
+          <span id="togglePw" onclick="togglePasswordVisibility('loginPassword','togglePw')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1.1rem;opacity:0.5;user-select:none;">👁️</span>
+        </div>
+      </div>
+      <div class="field" id="confirmPwField" style="display:none;">
+        <label class="label">パスワード（確認）</label>
+        <div style="position:relative;">
+          <input class="input" type="password" id="loginPasswordConfirm" placeholder="パスワード（もう一度）">
+          <span id="togglePwConfirm" onclick="togglePasswordVisibility('loginPasswordConfirm','togglePwConfirm')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1.1rem;opacity:0.5;user-select:none;">👁️</span>
+        </div>
       </div>
       <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" type="submit" id="loginBtn">
         ログイン
       </button>
     </form>
+
+    <div style="text-align:center;margin-top:12px;" id="forgotPwLink">
+      <a href="#" onclick="showForgotPassword()" style="font-size:0.8rem;color:var(--text-muted);">パスワードを忘れた方はこちら</a>
+    </div>
 
     <div class="login-toggle">
       <span id="loginToggleText">アカウントをお持ちでない方は</span>
@@ -1002,12 +1016,42 @@ function toast(message, type = 'info') {
 // ============================
 // 認証
 // ============================
+// パスワード表示切替
+function togglePasswordVisibility(inputId, toggleId) {
+  const input = document.getElementById(inputId);
+  const toggle = document.getElementById(toggleId);
+  if (input.type === 'password') {
+    input.type = 'text';
+    toggle.textContent = '🙈';
+    toggle.style.opacity = '0.8';
+  } else {
+    input.type = 'password';
+    toggle.textContent = '👁️';
+    toggle.style.opacity = '0.5';
+  }
+}
+
+// パスワード忘れ
+function showForgotPassword() {
+  const errorEl = document.getElementById('loginError');
+  errorEl.innerHTML = '⚠️ パスワードリセット機能は現在準備中です。<br>管理者にお問い合わせください。';
+  errorEl.style.display = 'block';
+  errorEl.style.background = 'rgba(245,158,11,0.1)';
+  errorEl.style.borderColor = 'rgba(245,158,11,0.3)';
+  errorEl.style.color = '#f59e0b';
+}
+
 function toggleAuthMode() {
   isRegisterMode = !isRegisterMode;
   document.getElementById('loginBtn').textContent = isRegisterMode ? '新規登録' : 'ログイン';
   document.getElementById('loginToggleText').textContent = isRegisterMode ? '既にアカウントをお持ちの方は' : 'アカウントをお持ちでない方は';
   document.getElementById('loginToggleLink').textContent = isRegisterMode ? 'ログイン' : '新規登録';
   document.getElementById('loginError').style.display = 'none';
+  // パスワード確認欄の表示切替
+  document.getElementById('confirmPwField').style.display = isRegisterMode ? 'block' : 'none';
+  document.getElementById('loginPasswordConfirm').required = isRegisterMode;
+  // パスワード忘れリンクの表示切替（登録モードでは非表示）
+  document.getElementById('forgotPwLink').style.display = isRegisterMode ? 'none' : 'block';
 }
 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -1016,6 +1060,24 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const password = document.getElementById('loginPassword').value;
   const btn = document.getElementById('loginBtn');
   const errorEl = document.getElementById('loginError');
+
+  // 新規登録時: パスワード確認チェック
+  if (isRegisterMode) {
+    const confirm = document.getElementById('loginPasswordConfirm').value;
+    if (password !== confirm) {
+      errorEl.textContent = 'パスワードが一致しません';
+      errorEl.style.display = 'block';
+      errorEl.style.background = '';
+      errorEl.style.borderColor = '';
+      errorEl.style.color = '';
+      return;
+    }
+    if (password.length < 6) {
+      errorEl.textContent = 'パスワードは6文字以上にしてください';
+      errorEl.style.display = 'block';
+      return;
+    }
+  }
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
@@ -1034,6 +1096,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
+    errorEl.style.background = '';
+    errorEl.style.borderColor = '';
+    errorEl.style.color = '';
   } finally {
     btn.disabled = false;
     btn.textContent = isRegisterMode ? '新規登録' : 'ログイン';
