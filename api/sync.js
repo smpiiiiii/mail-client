@@ -75,12 +75,23 @@ module.exports = async (req, res) => {
       const targetUids = uidsToFetch.slice(0, BATCH_SIZE);
       const uidRange = targetUids.join(',');
 
+      // 既存メールのUID一覧を取得（重複防止）
+      const existingIds = await redis.zrange(`mail:account:${accountId}:emails`, 0, -1) || [];
+      const existingUids = new Set();
+      for (const eid of existingIds) {
+        const u = await redis.hget(`mail:email:${eid}`, 'uid');
+        if (u) existingUids.add(u);
+      }
+
       for await (const msg of client.fetch(uidRange, {
         uid: true, envelope: true, bodyStructure: true
       }, { uid: true })) {
         // タイムアウトチェック
         if (Date.now() - startTime > TIMEOUT_MS) break;
         if (synced >= BATCH_SIZE) break;
+
+        // UID重複チェック（既に保存済みならスキップ）
+        if (existingUids.has(msg.uid.toString())) continue;
 
         const env = msg.envelope;
         const emailId = genId();
