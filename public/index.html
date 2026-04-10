@@ -912,7 +912,6 @@ let isRegisterMode = false;
 
 // データリセット
 async function resetData() {
-  if (!confirm('全メールデータを削除しますか？アカウント接続は維持されます。')) return;
   try {
     const data = await api('reset', { method: 'POST' });
     toast(data.message || 'リセット完了', 'success');
