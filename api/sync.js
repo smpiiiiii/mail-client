@@ -51,29 +51,33 @@ module.exports = async (req, res) => {
       const lastUid = parseInt(account.lastSyncedUid) || 0;
       let maxUid = lastUid;
 
-      // fetchのイテレータ（初回 vs 差分で分ける）
-      let fetchIterator;
+      let uidsToFetch;
       if (lastUid > 0) {
-        // 2回目以降: UIDベースで差分取得
-        fetchIterator = client.fetch(`${lastUid + 1}:*`, {
-          uid: true, envelope: true, bodyStructure: true
-        }, { uid: true });
+        // 2回目以降: 前回以降のUIDを取得
+        uidsToFetch = await client.search({ uid: `${lastUid + 1}:*` }, { uid: true });
+        // IMAPの仕様でlastUid自体も含まれる場合があるので除外
+        uidsToFetch = uidsToFetch.filter(u => u > lastUid);
       } else {
-        // 初回: シーケンス番号で最新20件（uid:falseでシーケンス番号として解釈）
-        const total = client.mailbox.exists || 0;
-        if (total === 0) {
-          lock.release();
-          await client.logout();
-          return res.json({ success: true, synced: 0, message: '受信箱にメールがありません' });
-        }
-        const startSeq = Math.max(1, total - 19);
-        fetchIterator = client.fetch(`${startSeq}:*`, {
-          uid: true, envelope: true, bodyStructure: true
-        });
-        // ※ 第3引数なし = シーケンス番号として解釈
+        // 初回: 過去30日のメールをSEARCHで取得（確実に最新メール）
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+        uidsToFetch = await client.search({ since }, { uid: true });
       }
 
-      for await (const msg of fetchIterator) {
+      if (uidsToFetch.length === 0) {
+        lock.release();
+        await client.logout();
+        return res.json({ success: true, synced: 0, message: '新しいメールはありません' });
+      }
+
+      // 最新のものから取得（降順ソート→最新BATCH_SIZE件）
+      uidsToFetch.sort((a, b) => b - a);
+      const targetUids = uidsToFetch.slice(0, BATCH_SIZE);
+      const uidRange = targetUids.join(',');
+
+      for await (const msg of client.fetch(uidRange, {
+        uid: true, envelope: true, bodyStructure: true
+      }, { uid: true })) {
         // タイムアウトチェック
         if (Date.now() - startTime > TIMEOUT_MS) break;
         if (synced >= BATCH_SIZE) break;

@@ -945,10 +945,13 @@ function formatDate(dateStr) {
   const now = new Date();
   const diffMs = now - d;
   const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  if (diffDays === 0 && d.getDate() === now.getDate()) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   if (diffDays === 1) return '昨日';
   if (diffDays < 7) return `${diffDays}日前`;
-  return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+  }
+  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 function formatDateFull(dateStr) {
   if (!dateStr) return '';
