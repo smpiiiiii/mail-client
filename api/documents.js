@@ -26,7 +26,9 @@ module.exports = async (req, res) => {
   for (const id of docIds) {
     const doc = await redis.hgetall(`mail:doc:${id}`);
     if (doc && doc.id) {
-      doc.items = JSON.parse(doc.items || '[]');
+      try {
+        doc.items = typeof doc.items === 'string' ? JSON.parse(doc.items) : (doc.items || []);
+      } catch { doc.items = []; }
       doc.amount = parseInt(doc.amount) || 0;
       doc.amountEx = parseInt(doc.amountEx) || 0;
       doc.tax = parseInt(doc.tax) || 0;
