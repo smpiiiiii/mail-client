@@ -2,10 +2,10 @@
  * IMAP同期API
  * POST /api/sync
  * 「今取り込む」ボタンで呼ばれる。IMAPで新着メールを取得してRedisに保存。
+ * 軽量版: envelope（ヘッダー）のみ取得し、本文は閲覧時にオンデマンド取得。
  */
 const { getRedis, getUser, decrypt, cors, genId } = require('./helpers');
 const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
 
 // IMAP同期は最大60秒
 module.exports.maxDuration = 60;
@@ -43,59 +43,67 @@ module.exports = async (req, res) => {
 
     const lock = await client.getMailboxLock('INBOX');
     let synced = 0;
-    const BATCH_SIZE = 30; // Vercelタイムアウト内で処理できる件数
+    const BATCH_SIZE = 10; // 初回は少なめに。Vercel 60秒タイムアウト対策
     const startTime = Date.now();
-    const TIMEOUT_MS = 50000; // 50秒で切り上げ
+    const TIMEOUT_MS = 40000; // 40秒で切り上げ（タイムアウト余裕）
 
     try {
       // 最後に同期したUID以降の新着メールを取得
       const lastUid = parseInt(account.lastSyncedUid) || 0;
-      const range = lastUid > 0 ? `${lastUid + 1}:*` : '1:*';
+      // 初回同期: 最新メールのみ取得（*は最新から）
+      const range = lastUid > 0 ? `${lastUid + 1}:*` : '*';
 
       let maxUid = lastUid;
 
+      // envelope（ヘッダー）のみ取得 — sourceは取得しない（高速化）
       for await (const msg of client.fetch(range, {
         uid: true,
         envelope: true,
-        bodyStructure: true,
-        source: true
+        bodyStructure: true
       }, { uid: true })) {
         // タイムアウトチェック
         if (Date.now() - startTime > TIMEOUT_MS) break;
         if (synced >= BATCH_SIZE) break;
 
-        const parsed = await simpleParser(msg.source);
-
+        const env = msg.envelope;
         const emailId = genId();
-        const timestamp = parsed.date ? parsed.date.getTime() : Date.now();
+        const timestamp = env.date ? new Date(env.date).getTime() : Date.now();
 
-        // 添付ファイル情報（メタデータのみ保存、実データは抽出時にIMAPから再取得）
-        const attachments = (parsed.attachments || []).map(att => ({
-          filename: att.filename || '不明',
-          contentType: att.contentType || 'application/octet-stream',
-          size: att.size || 0
-        }));
+        // 添付ファイル情報をbodyStructureから取得
+        const attachments = [];
+        function walkParts(part) {
+          if (part.disposition === 'attachment' || (part.type && part.subtype && part.size > 0 && part.disposition)) {
+            attachments.push({
+              filename: (part.dispositionParameters && part.dispositionParameters.filename) || (part.parameters && part.parameters.name) || '添付ファイル',
+              contentType: `${part.type}/${part.subtype}`,
+              size: part.size || 0
+            });
+          }
+          if (part.childNodes) part.childNodes.forEach(walkParts);
+        }
+        if (msg.bodyStructure) walkParts(msg.bodyStructure);
 
-        // 本文プレビュー
-        const bodyText = parsed.text || '';
-        const htmlBody = parsed.html || '';
-        const bodyPreview = (bodyText || htmlBody.replace(/<[^>]+>/g, ' ')).substring(0, 200).trim();
+        // 差出人情報
+        const fromAddr = env.from && env.from[0] ? env.from[0] : {};
+        const fromText = fromAddr.address || '';
+        const fromName = fromAddr.name || '';
+        const toAddr = env.to && env.to[0] ? env.to[0] : {};
 
-        // メールをRedisに保存
+        // メールをRedisに保存（本文なし — 閲覧時にIMAPから取得）
         await redis.hset(`mail:email:${emailId}`, {
           id: emailId,
           accountId,
-          messageId: parsed.messageId || '',
+          messageId: env.messageId || '',
           uid: msg.uid.toString(),
-          subject: parsed.subject || '(件名なし)',
-          from: parsed.from?.text || '',
-          fromName: parsed.from?.value?.[0]?.name || '',
-          to: parsed.to?.text || '',
-          date: parsed.date?.toISOString() || new Date().toISOString(),
+          subject: env.subject || '(件名なし)',
+          from: fromText,
+          fromName: fromName,
+          to: toAddr.address || '',
+          date: env.date ? new Date(env.date).toISOString() : new Date().toISOString(),
           timestamp: timestamp.toString(),
-          bodyPreview,
-          bodyText: bodyText.substring(0, 50000),
-          bodyHtml: htmlBody.substring(0, 100000),
+          bodyPreview: '',
+          bodyText: '',
+          bodyHtml: '',
           hasAttachment: attachments.length > 0 ? '1' : '0',
           attachments: JSON.stringify(attachments),
           isRead: '0',

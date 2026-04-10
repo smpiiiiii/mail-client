@@ -1,9 +1,14 @@
 /**
  * メール一覧・詳細API
  * GET /api/emails          — メール一覧（ページネーション）
- * GET /api/emails?id=xxx   — メール詳細
+ * GET /api/emails?id=xxx   — メール詳細（本文はIMAPからオンデマンド取得）
  */
-const { getRedis, getUser, cors } = require('./helpers');
+const { getRedis, getUser, decrypt, cors } = require('./helpers');
+const { ImapFlow } = require('imapflow');
+const { simpleParser } = require('mailparser');
+
+// メール本文取得にIMAP再接続が必要なため60秒に延長
+module.exports.maxDuration = 60;
 
 module.exports = async (req, res) => {
   cors(res);
@@ -27,6 +32,50 @@ module.exports = async (req, res) => {
     // 既読フラグを設定
     if (email.isRead !== '1') {
       await redis.hset(`mail:email:${emailId}`, { isRead: '1' });
+    }
+
+    // 本文がまだ取得されていない場合、IMAPからオンデマンド取得
+    if (!email.bodyText && !email.bodyHtml) {
+      try {
+        const account = await redis.hgetall(`mail:account:${email.accountId}`);
+        if (account && account.encPassword) {
+          const password = decrypt(account.encPassword);
+          const client = new ImapFlow({
+            host: account.imapHost,
+            port: parseInt(account.imapPort),
+            secure: true,
+            auth: { user: account.email, pass: password },
+            logger: false
+          });
+
+          await client.connect();
+          const lock = await client.getMailboxLock('INBOX');
+          try {
+            for await (const msg of client.fetch(email.uid, {
+              uid: true,
+              source: true
+            }, { uid: true })) {
+              const parsed = await simpleParser(msg.source);
+              email.bodyText = (parsed.text || '').substring(0, 50000);
+              email.bodyHtml = (parsed.html || '').substring(0, 100000);
+              email.bodyPreview = (email.bodyText || email.bodyHtml.replace(/<[^>]+>/g, ' ')).substring(0, 200);
+
+              // Redisにキャッシュ（次回はIMAPに接続不要）
+              await redis.hset(`mail:email:${emailId}`, {
+                bodyText: email.bodyText,
+                bodyHtml: email.bodyHtml,
+                bodyPreview: email.bodyPreview
+              });
+            }
+          } finally {
+            lock.release();
+          }
+          await client.logout();
+        }
+      } catch (e) {
+        console.error('本文取得エラー:', e.message);
+        email.bodyText = '(本文の取得に失敗しました)';
+      }
     }
 
     return res.json({
@@ -67,7 +116,7 @@ module.exports = async (req, res) => {
         from: email.from,
         fromName: email.fromName,
         date: email.date,
-        bodyPreview: email.bodyPreview,
+        bodyPreview: email.bodyPreview || '',
         hasAttachment: email.hasAttachment === '1',
         isRead: email.isRead === '1',
         extracted: email.extracted === '1',
@@ -84,3 +133,4 @@ module.exports = async (req, res) => {
     pages: Math.ceil(total / per)
   });
 };
+
