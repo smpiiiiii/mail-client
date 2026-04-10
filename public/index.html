@@ -805,6 +805,9 @@
           <select class="input" id="accountFilter" style="width:200px;padding:6px 10px;font-size:0.82rem;" onchange="loadEmails()">
             <option value="">全アカウント</option>
           </select>
+          <select class="input" id="syncMonthSelect" style="width:140px;padding:6px 10px;font-size:0.82rem;">
+            <option value="">最新</option>
+          </select>
           <button class="btn btn-primary" id="syncBtn" onclick="syncEmails()">
             🔄 今取り込む
           </button>
@@ -1412,6 +1415,7 @@ async function syncEmails() {
     return;
   }
 
+  const month = document.getElementById('syncMonthSelect').value; // "" or "2026-04"
   const btn = document.getElementById('syncBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> 同期中...';
@@ -1420,7 +1424,9 @@ async function syncEmails() {
   try {
     for (const acc of accounts) {
       try {
-        const data = await api('sync', { method: 'POST', body: { accountId: acc.id } });
+        const body = { accountId: acc.id };
+        if (month) body.month = month;
+        const data = await api('sync', { method: 'POST', body });
         totalSynced += data.synced || 0;
       } catch (err) {
         toast(`${acc.email}: ${err.message}`, 'error');
@@ -1434,6 +1440,20 @@ async function syncEmails() {
     btn.textContent = '🔄 今取り込む';
   }
 }
+
+// 月セレクタの選択肢を生成（現在月から12ヶ月前まで）
+function initMonthSelector() {
+  const sel = document.getElementById('syncMonthSelect');
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    sel.innerHTML += `<option value="${value}">${label}</option>`;
+  }
+}
+initMonthSelector();
+
 
 async function syncAccount(accountId) {
   try {
