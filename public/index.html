@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>📧 MailExtract - メール書類抽出</title>
+  <meta name="description" content="メールから請求書・領収書をAIで自動抽出するメールクライアント">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* === リセット・ベース === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deepest: #06060f;
+      --bg-primary: #0a0a1a;
+      --bg-secondary: #10102a;
+      --bg-card: rgba(20, 20, 50, 0.65);
+      --bg-card-solid: #141432;
+      --bg-hover: rgba(124, 58, 237, 0.08);
+      --bg-active: rgba(124, 58, 237, 0.15);
+      --accent: #7c3aed;
+      --accent-light: #a78bfa;
+      --accent-glow: rgba(124, 58, 237, 0.35);
+      --accent-2: #3b82f6;
+      --accent-2-light: #60a5fa;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: rgba(148, 163, 184, 0.1);
+      --border-focus: rgba(124, 58, 237, 0.5);
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --sidebar-width: 240px;
+      --sidebar-collapsed: 64px;
+    }
+
+    html { font-size: 14px; }
+    body {
+      font-family: var(--font);
+      background: var(--bg-deepest);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    a { color: var(--accent-light); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* === スクロールバー === */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.3); }
+
+    /* === ボタン === */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.85rem; font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #6d28d9);
+      border-color: transparent;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #8b5cf6, var(--accent));
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+    .btn-danger { border-color: var(--error); color: var(--error); }
+    .btn-danger:hover { background: var(--error-bg); }
+    .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+    /* === 入力フィールド === */
+    .input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      transition: var(--transition);
+      outline: none;
+    }
+    .input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .input::placeholder { color: var(--text-muted); }
+    select.input { cursor: pointer; }
+
+    /* === カード === */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    /* === ラベル === */
+    .label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* === バッジ === */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-invoice { background: rgba(59,130,246,0.15); color: var(--accent-2-light); }
+    .badge-receipt { background: rgba(16,185,129,0.15); color: var(--success); }
+    .badge-high { background: var(--success-bg); color: var(--success); }
+    .badge-mid { background: var(--warning-bg); color: var(--warning); }
+    .badge-low { background: var(--error-bg); color: var(--error); }
+
+    /* === ログイン画面 === */
+    #loginView {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-deepest);
+      z-index: 1000;
+    }
+
+    .login-bg {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(59,130,246,0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(16,185,129,0.06) 0%, transparent 50%);
+      animation: bgPulse 8s ease-in-out infinite;
+    }
+    @keyframes bgPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .login-card {
+      position: relative;
+      width: 100%; max-width: 400px;
+      padding: 40px;
+      background: var(--bg-card);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      animation: slideUp 0.6s ease-out;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .login-logo .icon {
+      font-size: 3rem;
+      display: block;
+      margin-bottom: 12px;
+    }
+    .login-logo h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent-2-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .login-logo p { color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px; }
+
+    .login-form .field { margin-bottom: 16px; }
+    .login-form .input { padding: 12px 16px; font-size: 0.95rem; }
+
+    .login-toggle {
+      text-align: center; margin-top: 20px;
+      color: var(--text-secondary); font-size: 0.85rem;
+    }
+    .login-toggle a { cursor: pointer; }
+
+    .login-error {
+      background: var(--error-bg);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--error);
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* === アプリ全体レイアウト === */
+    #appView {
+      display: none;
+      height: 100vh;
+    }
+    #appView.active { display: flex; }
+
+    /* --- サイドバー --- */
+    .sidebar {
+      width: var(--sidebar-collapsed);
+      min-width: var(--sidebar-collapsed);
+      height: 100vh;
+      background: var(--bg-primary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: width 0.3s ease;
+      overflow: hidden;
+      z-index: 100;
+    }
+    .sidebar:hover { width: var(--sidebar-width); }
+
+    .sidebar-brand {
+      padding: 16px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+      min-height: 60px;
+      white-space: nowrap;
+    }
+    .sidebar-brand .icon { font-size: 1.5rem; flex-shrink: 0; }
+    .sidebar-brand span {
+      font-weight: 700; font-size: 1rem;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent-2-light));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .sidebar:hover .sidebar-brand span { opacity: 1; }
+
+    .sidebar-nav { flex: 1; padding: 8px; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: var(--transition);
+      white-space: nowrap;
+      margin-bottom: 2px;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active {
+      background: var(--bg-active);
+      color: var(--accent-light);
+    }
+    .nav-item .icon { font-size: 1.2rem; flex-shrink: 0; width: 24px; text-align: center; }
+    .nav-item .text { opacity: 0; transition: opacity 0.2s; font-size: 0.9rem; font-weight: 500; }
+    .sidebar:hover .nav-item .text { opacity: 1; }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .sidebar:hover .nav-badge { opacity: 1; }
+
+    .sidebar-footer {
+      padding: 12px 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* --- メインコンテンツ --- */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-deepest);
+    }
+
+    /* === ヘッダーバー === */
+    .header-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border);
+      min-height: 60px;
+    }
+    .header-bar h2 { font-size: 1.1rem; font-weight: 600; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* === 受信箱レイアウト === */
+    .inbox-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* --- メール一覧 --- */
+    .email-list {
+      width: 380px;
+      min-width: 300px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+    }
+
+    .email-list-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .email-list-header .count { font-size: 0.8rem; color: var(--text-muted); }
+
+    .email-list-items {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .email-item {
+      display: flex; gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .email-item:hover { background: var(--bg-hover); }
+    .email-item.active { background: var(--bg-active); border-left: 3px solid var(--accent); }
+    .email-item.unread .email-subject { font-weight: 600; color: var(--text-primary); }
+
+    .email-avatar {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem;
+      flex-shrink: 0;
+      color: #fff;
+    }
+
+    .email-info { flex: 1; min-width: 0; }
+    .email-sender {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .email-date { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+    .email-subject {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin: 2px 0;
+    }
+    .email-preview {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .email-meta {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+    }
+    .email-meta .icon { font-size: 0.75rem; }
+
+    .email-list-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .email-list-empty .icon { font-size: 3rem; display: block; margin-bottom: 12px; }
+
+    .email-list-pagination {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* --- メールプレビュー --- */
+    .email-preview-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .email-preview-empty {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      color: var(--text-muted);
+    }
+    .email-preview-empty .icon { font-size: 4rem; margin-bottom: 12px; opacity: 0.3; }
+
+    .email-preview-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .email-preview-header h3 { font-size: 1.2rem; font-weight: 600; margin-bottom: 12px; }
+
+    .email-from-info {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .email-from-info .avatar {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1rem; color: #fff;
+    }
+    .email-from-detail { flex: 1; }
+    .email-from-detail .name { font-weight: 600; font-size: 0.95rem; }
+    .email-from-detail .addr { font-size: 0.8rem; color: var(--text-muted); }
+    .email-from-detail .date-full { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+
+    .email-attachments {
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .attachment-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .email-body-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .email-body-content {
+      font-size: 0.9rem;
+      line-height: 1.8;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      max-width: 800px;
+    }
+
+    .extract-bar {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-primary);
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .extract-result {
+      margin-top: 0;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      animation: slideUp 0.3s ease-out;
+    }
+    .extract-result h4 { font-size: 0.9rem; margin-bottom: 12px; color: var(--accent-light); }
+    .extract-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .extract-field { }
+    .extract-field .label { font-size: 0.7rem; margin-bottom: 2px; }
+    .extract-field .value { font-size: 0.95rem; font-weight: 600; }
+
+    /* === 書類ダッシュボード === */
+    .documents-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      transition: var(--transition);
+    }
+    .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .stat-card .stat-icon { font-size: 1.5rem; margin-bottom: 8px; }
+    .stat-card .stat-value {
+      font-size: 1.6rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent-2-light));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stat-card .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-bar select { width: auto; min-width: 150px; }
+
+    .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .doc-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .doc-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+    }
+    .doc-table tr:hover { background: var(--bg-hover); }
+    .doc-table .amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* === 設定画面 === */
+    .settings-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      max-width: 700px;
+    }
+
+    .settings-section {
+      margin-bottom: 32px;
+    }
+    .settings-section h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .account-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+    .account-item .info { flex: 1; }
+    .account-item .email-addr { font-weight: 600; font-size: 0.9rem; }
+    .account-item .host { font-size: 0.78rem; color: var(--text-muted); }
+    .account-item .synced { font-size: 0.75rem; color: var(--text-muted); }
+
+    .preset-buttons {
+      display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .preset-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-family: var(--font);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--accent-light); }
+
+    .form-row { margin-bottom: 14px; }
+    .form-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+    /* === トースト通知 === */
+    .toast-container {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 500;
+      box-shadow: var(--shadow);
+      animation: toastIn 0.3s ease-out;
+      max-width: 360px;
+    }
+    .toast-success { background: #065f46; color: #a7f3d0; border: 1px solid rgba(16,185,129,0.3); }
+    .toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+    .toast-info { background: #1e3a5f; color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* === ローディング === */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+    .spinner-lg { width: 40px; height: 40px; border-width: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-overlay {
+      position: absolute; inset: 0;
+      background: rgba(6,6,15,0.7);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+      z-index: 50;
+      backdrop-filter: blur(4px);
+    }
+    .loading-text { font-size: 0.85rem; color: var(--text-secondary); }
+
+    /* === セクション切り替え === */
+    .section { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .section.active { display: flex; }
+
+    /* === レスポンシブ === */
+    @media (max-width: 768px) {
+      .sidebar { width: var(--sidebar-collapsed); }
+      .sidebar:hover { width: var(--sidebar-collapsed); }
+      .sidebar .nav-item .text,
+      .sidebar .nav-badge,
+      .sidebar-brand span { display: none; }
+      .email-list { width: 100%; min-width: 0; }
+      .email-preview-pane { display: none; }
+      .email-preview-pane.has-email { display: flex; position: fixed; inset: 0; z-index: 200; background: var(--bg-deepest); }
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ========== ログイン画面 ========== -->
+<div id="loginView">
+  <div class="login-bg"></div>
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="icon">📧</span>
+      <h1>MailExtract</h1>
+      <p>メールから書類をAIで自動抽出</p>
+    </div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <form class="login-form" id="loginForm">
+      <div class="field">
+        <label class="label">メールアドレス</label>
+        <input class="input" type="email" id="loginEmail" placeholder="you@example.com" required>
+      </div>
+      <div class="field">
+        <label class="label">パスワード</label>
+        <input class="input" type="password" id="loginPassword" placeholder="パスワード" required>
+      </div>
+      <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" type="submit" id="loginBtn">
+        ログイン
+      </button>
+    </form>
+
+    <div class="login-toggle">
+      <span id="loginToggleText">アカウントをお持ちでない方は</span>
+      <a id="loginToggleLink" onclick="toggleAuthMode()">新規登録</a>
+    </div>
+  </div>
+</div>
+
+<!-- ========== メインアプリ ========== -->
+<div id="appView">
+  <!-- サイドバー -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <span class="icon">📧</span>
+      <span>MailExtract</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-item active" data-section="inbox" onclick="showSection('inbox')">
+        <span class="icon">📥</span>
+        <span class="text">受信箱</span>
+        <span class="nav-badge" id="unreadBadge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" data-section="documents" onclick="showSection('documents')">
+        <span class="icon">📊</span>
+        <span class="text">書類</span>
+      </div>
+      <div class="nav-item" data-section="settings" onclick="showSection('settings')">
+        <span class="icon">⚙️</span>
+        <span class="text">設定</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="nav-item" onclick="logout()">
+        <span class="icon">🚪</span>
+        <span class="text">ログアウト</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <div class="main-content">
+
+    <!-- ===== 受信箱セクション ===== -->
+    <section class="section active" id="inboxSection">
+      <div class="header-bar">
+        <h2>📥 受信箱</h2>
+        <div class="header-actions">
+          <select class="input" id="accountFilter" style="width:200px;padding:6px 10px;font-size:0.82rem;" onchange="loadEmails()">
+            <option value="">全アカウント</option>
+          </select>
+          <button class="btn btn-primary" id="syncBtn" onclick="syncEmails()">
+            🔄 今取り込む
+          </button>
+        </div>
+      </div>
+      <div class="inbox-layout">
+        <!-- メール一覧 -->
+        <div class="email-list">
+          <div class="email-list-header">
+            <span class="count" id="emailCount">0件</span>
+          </div>
+          <div class="email-list-items" id="emailListItems"></div>
+          <div class="email-list-pagination" id="emailPagination"></div>
+        </div>
+        <!-- メールプレビュー -->
+        <div class="email-preview-pane" id="emailPreview">
+          <div class="email-preview-empty">
+            <span class="icon">✉️</span>
+            <p>メールを選択してください</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 書類セクション ===== -->
+    <section class="section" id="documentsSection">
+      <div class="header-bar">
+        <h2>📊 書類ダッシュボード</h2>
+        <div class="header-actions">
+          <button class="btn" onclick="exportCSV()">📥 CSVエクスポート</button>
+        </div>
+      </div>
+      <div class="documents-view">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value" id="statTotal">¥0</div>
+            <div class="stat-label">合計金額</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📄</div>
+            <div class="stat-value" id="statInvoice">0件</div>
+            <div class="stat-label">請求書</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🧾</div>
+            <div class="stat-value" id="statReceipt">0件</div>
+            <div class="stat-label">領収書</div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <select class="input" id="docMonthFilter" onchange="loadDocuments()" style="width:160px;">
+            <option value="">全期間</option>
+          </select>
+          <select class="input" id="docTypeFilter" onchange="loadDocuments()" style="width:140px;">
+            <option value="all">全種別</option>
+            <option value="請求書">📄 請求書</option>
+            <option value="領収書">🧾 領収書</option>
+          </select>
+        </div>
+
+        <table class="doc-table" id="docTable">
+          <thead>
+            <tr>
+              <th>種別</th>
+              <th>取引先</th>
+              <th>日付</th>
+              <th>金額(税込)</th>
+              <th>税抜</th>
+              <th>消費税</th>
+              <th>品目</th>
+              <th>信頼度</th>
+            </tr>
+          </thead>
+          <tbody id="docTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== 設定セクション ===== -->
+    <section class="section" id="settingsSection">
+      <div class="header-bar">
+        <h2>⚙️ 設定</h2>
+      </div>
+      <div class="settings-view">
+        <!-- 接続済みアカウント -->
+        <div class="settings-section">
+          <h3>📧 接続済みアカウント</h3>
+          <div id="accountList"></div>
+        </div>
+
+        <!-- アカウント追加 -->
+        <div class="settings-section">
+          <h3>➕ メールアカウントを追加</h3>
+
+          <label class="label" style="margin-bottom:8px;">プロバイダー（自動設定）</label>
+          <div class="preset-buttons">
+            <button class="preset-btn" onclick="selectPreset('gmail.com','imap.gmail.com',993)">Gmail</button>
+            <button class="preset-btn" onclick="selectPreset('yahoo.co.jp','imap.mail.yahoo.co.jp',993)">Yahoo</button>
+            <button class="preset-btn" onclick="selectPreset('outlook.com','outlook.office365.com',993)">Outlook</button>
+            <button class="preset-btn" onclick="selectPreset('icloud.com','imap.mail.me.com',993)">iCloud</button>
+          </div>
+
+          <div class="card" style="margin-top:8px;">
+            <div class="form-row">
+              <label class="label">メールアドレス</label>
+              <input class="input" type="email" id="addEmail" placeholder="user@gmail.com">
+            </div>
+            <div class="form-row">
+              <label class="label">パスワード（アプリパスワード推奨）</label>
+              <input class="input" type="password" id="addPassword" placeholder="アプリパスワード">
+            </div>
+            <div class="form-row">
+              <label class="label">IMAPホスト</label>
+              <input class="input" type="text" id="addImapHost" placeholder="imap.gmail.com">
+            </div>
+            <div class="form-row">
+              <label class="label">IMAPポート</label>
+              <input class="input" type="number" id="addImapPort" value="993">
+            </div>
+            <div class="form-actions">
+              <button class="btn" id="testConnBtn" onclick="testConnection()">🔌 接続テスト</button>
+              <button class="btn btn-primary" id="addAccountBtn" onclick="addAccount()">➕ 追加</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================
+// グローバル状態
+// ============================
+let authToken = localStorage.getItem('mail_token') || '';
+let currentUser = JSON.parse(localStorage.getItem('mail_user') || 'null');
+let accounts = [];
+let currentEmailId = null;
+let currentPage = 1;
+let isRegisterMode = false;
+
+// 色パレット（検索→アバター色を生成）
+const AVATAR_COLORS = [
+  '#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+  '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'
+];
+function getAvatarColor(str) {
+  let hash = 0;
+  for (let i = 0; i < (str || '').length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+function getInitials(name, email) {
+  if (name) {
+    const parts = name.split(/[\s　]+/);
+    return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.substring(0, 2).toUpperCase();
+  }
+  return (email || '?')[0].toUpperCase();
+}
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  if (diffDays === 1) return '昨日';
+  if (diffDays < 7) return `${diffDays}日前`;
+  return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+}
+function formatDateFull(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleString('ja-JP');
+}
+function formatYen(amount) {
+  return '¥' + (amount || 0).toLocaleString();
+}
+
+// ============================
+// API クライアント
+// ============================
+async function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+  const res = await fetch(`/api/${path}`, {
+    ...options,
+    headers: { ...headers, ...options.headers },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  if (res.headers.get('content-type')?.includes('text/csv')) {
+    return { _blob: await res.blob() };
+  }
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'APIエラー');
+  return data;
+}
+
+// ============================
+// トースト通知
+// ============================
+function toast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(40px)'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+// ============================
+// 認証
+// ============================
+function toggleAuthMode() {
+  isRegisterMode = !isRegisterMode;
+  document.getElementById('loginBtn').textContent = isRegisterMode ? '新規登録' : 'ログイン';
+  document.getElementById('loginToggleText').textContent = isRegisterMode ? '既にアカウントをお持ちの方は' : 'アカウントをお持ちでない方は';
+  document.getElementById('loginToggleLink').textContent = isRegisterMode ? 'ログイン' : '新規登録';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  const errorEl = document.getElementById('loginError');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  errorEl.style.display = 'none';
+
+  try {
+    const data = await api('auth', {
+      method: 'POST',
+      body: { action: isRegisterMode ? 'register' : 'login', email, password }
+    });
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('mail_token', authToken);
+    localStorage.setItem('mail_user', JSON.stringify(currentUser));
+    enterApp();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isRegisterMode ? '新規登録' : 'ログイン';
+  }
+});
+
+function logout() {
+  authToken = '';
+  currentUser = null;
+  localStorage.removeItem('mail_token');
+  localStorage.removeItem('mail_user');
+  document.getElementById('loginView').style.display = '';
+  document.getElementById('appView').classList.remove('active');
+}
+
+// ============================
+// アプリ初期化
+// ============================
+function enterApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('appView').classList.add('active');
+  loadAccounts();
+  loadEmails();
+}
+
+// 起動時にトークンがあればアプリへ
+if (authToken && currentUser) {
+  enterApp();
+}
+
+// ============================
+// セクション切り替え
+// ============================
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-section]').forEach(n => n.classList.remove('active'));
+  document.getElementById(name + 'Section').classList.add('active');
+  document.querySelector(`.nav-item[data-section="${name}"]`).classList.add('active');
+
+  if (name === 'documents') loadDocuments();
+  if (name === 'settings') loadAccounts();
+}
+
+// ============================
+// アカウント管理
+// ============================
+async function loadAccounts() {
+  try {
+    const data = await api('accounts');
+    accounts = data.accounts || [];
+    renderAccountList();
+    renderAccountFilter();
+  } catch (err) {
+    console.error('アカウント取得エラー:', err);
+  }
+}
+
+function renderAccountList() {
+  const container = document.getElementById('accountList');
+  if (accounts.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">まだメールアカウントが接続されていません。下のフォームから追加してください。</p>';
+    return;
+  }
+  container.innerHTML = accounts.map(acc => `
+    <div class="account-item">
+      <div class="info">
+        <div class="email-addr">${acc.email}</div>
+        <div class="host">${acc.imapHost}:${acc.imapPort}</div>
+        ${acc.lastSynced ? `<div class="synced">🕐 最終同期: ${formatDateFull(acc.lastSynced)}</div>` : '<div class="synced">未同期</div>'}
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" onclick="syncAccount('${acc.id}')">🔄 同期</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAccount('${acc.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAccountFilter() {
+  const select = document.getElementById('accountFilter');
+  select.innerHTML = '<option value="">全アカウント</option>' +
+    accounts.map(a => `<option value="${a.id}">${a.email}</option>`).join('');
+}
+
+function selectPreset(domain, host, port) {
+  document.getElementById('addImapHost').value = host;
+  document.getElementById('addImapPort').value = port;
+  const emailInput = document.getElementById('addEmail');
+  if (!emailInput.value || !emailInput.value.includes('@')) {
+    emailInput.placeholder = `user@${domain}`;
+  }
+}
+
+async function testConnection() {
+  const btn = document.getElementById('testConnBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> テスト中...';
+  try {
+    const data = await api('accounts', {
+      method: 'POST',
+      body: {
+        action: 'test',
+        email: document.getElementById('addEmail').value,
+        password: document.getElementById('addPassword').value,
+        imapHost: document.getElementById('addImapHost').value,
+        imapPort: parseInt(document.getElementById('addImapPort').value)
+      }
+    });
+    toast(data.message || '接続成功！', 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔌 接続テスト';
+  }
+}
+
+async function addAccount() {
+  const btn = document.getElementById('addAccountBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 追加中...';
+  try {
+    await api('accounts', {
+      method: 'POST',
+      body: {
+        action: 'add',
+        email: document.getElementById('addEmail').value,
+        password: document.getElementById('addPassword').value,
+        imapHost: document.getElementById('addImapHost').value,
+        imapPort: parseInt(document.getElementById('addImapPort').value)
+      }
+    });
+    toast('アカウントを追加しました！', 'success');
+    document.getElementById('addEmail').value = '';
+    document.getElementById('addPassword').value = '';
+    loadAccounts();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '➕ 追加';
+  }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('このアカウントを削除しますか？')) return;
+  try {
+    await api('accounts', { method: 'POST', body: { action: 'delete', accountId: id } });
+    toast('アカウントを削除しました', 'success');
+    loadAccounts();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ============================
+// メール同期
+// ============================
+async function syncEmails() {
+  if (accounts.length === 0) {
+    toast('先にメールアカウントを追加してください', 'error');
+    showSection('settings');
+    return;
+  }
+
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 同期中...';
+
+  let totalSynced = 0;
+  try {
+    for (const acc of accounts) {
+      try {
+        const data = await api('sync', { method: 'POST', body: { accountId: acc.id } });
+        totalSynced += data.synced || 0;
+      } catch (err) {
+        toast(`${acc.email}: ${err.message}`, 'error');
+      }
+    }
+    toast(`同期完了！ ${totalSynced}件取得`, 'success');
+    loadEmails();
+    loadAccounts();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 今取り込む';
+  }
+}
+
+async function syncAccount(accountId) {
+  try {
+    toast('同期中...', 'info');
+    const data = await api('sync', { method: 'POST', body: { accountId } });
+    toast(data.message || '同期完了', 'success');
+    loadEmails();
+    loadAccounts();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ============================
+// メール一覧
+// ============================
+async function loadEmails(page = 1) {
+  currentPage = page;
+  const accountId = document.getElementById('accountFilter').value;
+  const params = new URLSearchParams({ page, per: 20 });
+  if (accountId) params.set('accountId', accountId);
+
+  try {
+    const data = await api(`emails?${params}`);
+    renderEmailList(data.emails, data.total, data.page, data.pages);
+  } catch (err) {
+    if (err.message.includes('認証')) {
+      logout();
+    } else {
+      console.error('メール取得エラー:', err);
+    }
+  }
+}
+
+function renderEmailList(emails, total, page, pages) {
+  document.getElementById('emailCount').textContent = `${total}件`;
+
+  const container = document.getElementById('emailListItems');
+  if (emails.length === 0) {
+    container.innerHTML = `
+      <div class="email-list-empty">
+        <span class="icon">📭</span>
+        <p>メールがありません</p>
+        <p style="font-size:0.8rem;margin-top:8px;">「今取り込む」ボタンでメールを取得してください</p>
+      </div>
+    `;
+    document.getElementById('emailPagination').innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = emails.map(email => {
+    const color = getAvatarColor(email.from);
+    const initials = getInitials(email.fromName, email.from);
+    const unreadClass = email.isRead ? '' : 'unread';
+    const activeClass = email.id === currentEmailId ? 'active' : '';
+
+    return `
+      <div class="email-item ${unreadClass} ${activeClass}" onclick="selectEmail('${email.id}')">
+        <div class="email-avatar" style="background:${color}">${initials}</div>
+        <div class="email-info">
+          <div class="email-sender">
+            <span>${email.fromName || email.from.split('<')[0].trim() || email.from}</span>
+            <span class="email-date">${formatDate(email.date)}</span>
+          </div>
+          <div class="email-subject">${escapeHtml(email.subject)}</div>
+          <div class="email-preview">${escapeHtml(email.bodyPreview || '')}</div>
+          <div class="email-meta">
+            ${email.hasAttachment ? '<span class="icon">📎</span>' : ''}
+            ${email.extracted ? '<span class="badge badge-receipt">✅ 抽出済</span>' : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // ページネーション
+  const pagination = document.getElementById('emailPagination');
+  if (pages <= 1) {
+    pagination.innerHTML = '';
+  } else {
+    pagination.innerHTML = `
+      <button class="btn btn-sm" ${page <= 1 ? 'disabled' : ''} onclick="loadEmails(${page - 1})">←</button>
+      <span style="font-size:0.8rem;color:var(--text-muted)">${page} / ${pages}</span>
+      <button class="btn btn-sm" ${page >= pages ? 'disabled' : ''} onclick="loadEmails(${page + 1})">→</button>
+    `;
+  }
+}
+
+// ============================
+// メール詳細
+// ============================
+async function selectEmail(emailId) {
+  currentEmailId = emailId;
+
+  // 一覧のアクティブ状態を更新
+  document.querySelectorAll('.email-item').forEach(el => el.classList.remove('active'));
+  const clickedItem = document.querySelector(`.email-item[onclick="selectEmail('${emailId}')"]`);
+  if (clickedItem) {
+    clickedItem.classList.add('active');
+    clickedItem.classList.remove('unread');
+  }
+
+  const pane = document.getElementById('emailPreview');
+  pane.classList.add('has-email');
+  pane.innerHTML = '<div class="loading-overlay"><span class="spinner spinner-lg"></span><span class="loading-text">読み込み中...</span></div>';
+
+  try {
+    const data = await api(`emails?id=${emailId}`);
+    const email = data.email;
+    const color = getAvatarColor(email.from);
+    const initials = getInitials(email.fromName, email.from);
+
+    // 添付ファイルチップ
+    let attachHtml = '';
+    if (email.attachments && email.attachments.length > 0) {
+      attachHtml = `
+        <div class="email-attachments">
+          <span style="font-size:0.8rem;color:var(--text-muted);">📎 添付ファイル:</span>
+          ${email.attachments.map(a => `
+            <span class="attachment-chip">📄 ${escapeHtml(a.filename)} <span style="color:var(--text-muted)">(${formatBytes(a.size)})</span></span>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // 本文（テキスト or HTMLサニタイズ）
+    const bodyContent = email.bodyText
+      ? escapeHtml(email.bodyText)
+      : (email.bodyHtml ? sanitizeHtml(email.bodyHtml) : '<span style="color:var(--text-muted)">(本文なし)</span>');
+
+    // 抽出結果
+    let extractResult = '';
+    if (email.extracted && email.docId) {
+      extractResult = `<div class="extract-result" id="extractResult"><h4>✅ 書類抽出済み</h4><p style="font-size:0.85rem;color:var(--text-secondary);">書類ダッシュボードで確認できます。</p></div>`;
+    }
+
+    pane.innerHTML = `
+      <div class="email-preview-header">
+        <h3>${escapeHtml(email.subject)}</h3>
+        <div class="email-from-info">
+          <div class="avatar" style="background:${color}">${initials}</div>
+          <div class="email-from-detail">
+            <div class="name">${escapeHtml(email.fromName || email.from)}</div>
+            <div class="addr">${escapeHtml(email.from)}</div>
+            <div class="date-full">${formatDateFull(email.date)}</div>
+          </div>
+        </div>
+      </div>
+      ${attachHtml}
+      <div class="email-body-container">
+        <div class="email-body-content">${bodyContent}</div>
+      </div>
+      ${extractResult}
+      <div class="extract-bar">
+        ${email.extracted
+          ? '<span style="color:var(--success);font-size:0.85rem;">✅ 書類は抽出済みです</span>'
+          : `<button class="btn btn-primary" id="extractBtn" onclick="extractDocument('${email.id}')">🤖 書類として抽出</button>
+             <span style="font-size:0.8rem;color:var(--text-muted);">AIが請求書・領収書を自動判定します</span>`
+        }
+      </div>
+    `;
+  } catch (err) {
+    pane.innerHTML = `<div class="email-preview-empty"><p>エラー: ${err.message}</p></div>`;
+  }
+}
+
+// ============================
+// AI書類抽出
+// ============================
+async function extractDocument(emailId) {
+  const btn = document.getElementById('extractBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> AI解析中...';
+
+  try {
+    const data = await api('extract', { method: 'POST', body: { emailId } });
+
+    if (!data.document) {
+      toast('請求書・領収書は検出されませんでした', 'info');
+      btn.disabled = false;
+      btn.textContent = '🤖 書類として抽出';
+      return;
+    }
+
+    const doc = data.document;
+    toast(`${doc.type}を抽出しました: ${doc.vendor} ${formatYen(doc.amount)}`, 'success');
+
+    // 抽出結果を表示
+    const bar = document.querySelector('.extract-bar');
+    bar.innerHTML = '<span style="color:var(--success);font-size:0.85rem;">✅ 書類は抽出済みです</span>';
+
+    // 結果カードを挿入
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'extract-result';
+    resultDiv.innerHTML = `
+      <h4>🤖 AI抽出結果</h4>
+      <div class="extract-grid">
+        <div class="extract-field">
+          <div class="label">種別</div>
+          <div class="value"><span class="badge ${doc.type === '請求書' ? 'badge-invoice' : 'badge-receipt'}">${doc.type}</span></div>
+        </div>
+        <div class="extract-field">
+          <div class="label">取引先</div>
+          <div class="value">${escapeHtml(doc.vendor)}</div>
+        </div>
+        <div class="extract-field">
+          <div class="label">日付</div>
+          <div class="value">${doc.date || '-'}</div>
+        </div>
+        <div class="extract-field">
+          <div class="label">金額(税込)</div>
+          <div class="value" style="color:var(--success);">${formatYen(doc.amount)}</div>
+        </div>
+        <div class="extract-field">
+          <div class="label">税抜</div>
+          <div class="value">${doc.amountEx ? formatYen(doc.amountEx) : '-'}</div>
+        </div>
+        <div class="extract-field">
+          <div class="label">消費税</div>
+          <div class="value">${doc.tax ? formatYen(doc.tax) : '-'}</div>
+        </div>
+        <div class="extract-field">
+          <div class="label">信頼度</div>
+          <div class="value"><span class="badge ${doc.confidence >= 0.8 ? 'badge-high' : doc.confidence >= 0.5 ? 'badge-mid' : 'badge-low'}">${(doc.confidence * 100).toFixed(0)}%</span></div>
+        </div>
+      </div>
+      ${doc.items && doc.items.length > 0 ? `<div style="margin-top:12px;"><div class="label">品目</div><div style="font-size:0.85rem;">${doc.items.join(' / ')}</div></div>` : ''}
+    `;
+    bar.parentNode.insertBefore(resultDiv, bar);
+
+    // メール一覧を更新
+    loadEmails(currentPage);
+
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '🤖 書類として抽出';
+  }
+}
+
+// ============================
+// 書類ダッシュボード
+// ============================
+async function loadDocuments() {
+  const month = document.getElementById('docMonthFilter').value;
+  const type = document.getElementById('docTypeFilter').value;
+  const params = new URLSearchParams();
+  if (month) params.set('month', month);
+  if (type) params.set('type', type);
+
+  try {
+    const data = await api(`documents?${params}`);
+    renderDocuments(data.documents, data.summary, data.months);
+  } catch (err) {
+    console.error('書類取得エラー:', err);
+  }
+}
+
+function renderDocuments(documents, summary, months) {
+  // 集計カード
+  document.getElementById('statTotal').textContent = formatYen(summary.total);
+  document.getElementById('statInvoice').textContent = `${summary.invoiceCount}件 (${formatYen(summary.invoiceTotal)})`;
+  document.getElementById('statReceipt').textContent = `${summary.receiptCount}件 (${formatYen(summary.receiptTotal)})`;
+
+  // 月フィルター更新
+  const monthSelect = document.getElementById('docMonthFilter');
+  const currentMonth = monthSelect.value;
+  monthSelect.innerHTML = '<option value="">全期間</option>' +
+    (months || []).map(m => `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>${m}</option>`).join('');
+
+  // テーブル
+  const tbody = document.getElementById('docTableBody');
+  if (documents.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">まだ抽出された書類がありません</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = documents.map(doc => `
+    <tr>
+      <td><span class="badge ${doc.type === '請求書' ? 'badge-invoice' : 'badge-receipt'}">${doc.type}</span></td>
+      <td style="font-weight:500;">${escapeHtml(doc.vendor || '不明')}</td>
+      <td>${doc.date || '-'}</td>
+      <td class="amount" style="color:var(--success);">${formatYen(doc.amount)}</td>
+      <td class="amount">${doc.amountEx ? formatYen(doc.amountEx) : '-'}</td>
+      <td class="amount">${doc.tax ? formatYen(doc.tax) : '-'}</td>
+      <td style="font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(doc.items || []).join(' / ') || '-'}</td>
+      <td><span class="badge ${doc.confidence >= 0.8 ? 'badge-high' : doc.confidence >= 0.5 ? 'badge-mid' : 'badge-low'}">${(doc.confidence * 100).toFixed(0)}%</span></td>
+    </tr>
+  `).join('');
+}
+
+async function exportCSV() {
+  const month = document.getElementById('docMonthFilter').value;
+  const type = document.getElementById('docTypeFilter').value;
+  const params = new URLSearchParams({ format: 'csv' });
+  if (month) params.set('month', month);
+  if (type) params.set('type', type);
+
+  try {
+    const data = await api(`documents?${params}`);
+    if (data._blob) {
+      const url = URL.createObjectURL(data._blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `documents_${month || 'all'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('CSVをダウンロードしました', 'success');
+    }
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ============================
+// ユーティリティ
+// ============================
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+function sanitizeHtml(html) {
+  // 危険なタグを除去したHTML（簡易サニタイズ）
+  return (html || '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes < 1024) return `${bytes || 0}B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
+  return `${(bytes / 1048576).toFixed(1)}MB`;
+}
+</script>
+</body>
+</html>

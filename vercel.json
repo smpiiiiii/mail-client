@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/sync.js": {
+      "maxDuration": 60
+    },
+    "api/extract.js": {
+      "maxDuration": 60
+    }
+  }
+}
