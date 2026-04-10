@@ -883,6 +883,13 @@
             </div>
           </div>
         </div>
+
+        <!-- データリセット -->
+        <div class="settings-section">
+          <h3>⚠️ データ管理</h3>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">メールデータに問題がある場合、全データを削除して再同期できます。</p>
+          <button class="btn btn-danger" onclick="resetData()">🗑️ メールデータをリセット</button>
+        </div>
       </div>
     </section>
 
@@ -902,6 +909,18 @@ let accounts = [];
 let currentEmailId = null;
 let currentPage = 1;
 let isRegisterMode = false;
+
+// データリセット
+async function resetData() {
+  if (!confirm('全メールデータを削除しますか？アカウント接続は維持されます。')) return;
+  try {
+    const data = await api('reset', { method: 'POST' });
+    toast(data.message || 'リセット完了', 'success');
+    loadEmails();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
 
 // 色パレット（検索→アバター色を生成）
 const AVATAR_COLORS = [
