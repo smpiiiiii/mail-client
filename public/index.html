@@ -884,7 +884,10 @@
             <option value="">最新</option>
           </select>
           <button class="btn btn-primary" id="syncBtn" onclick="syncEmails()">
-            🔄 今取り込む
+            🔄 取込
+          </button>
+          <button class="btn" id="scanAllBtn" onclick="scanAllEmails()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;">
+            🤖 全スキャン
           </button>
         </div>
       </div>
@@ -1512,7 +1515,7 @@ async function syncEmails() {
     loadAccounts();
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔄 今取り込む';
+    btn.textContent = '🔄 取込';
   }
 }
 
@@ -1529,6 +1532,33 @@ function initMonthSelector() {
 }
 initMonthSelector();
 
+// 全メール一括AIスキャン
+async function scanAllEmails() {
+  const btn = document.getElementById('scanAllBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> スキャン中...';
+
+  try {
+    const data = await api('extract-all', { method: 'POST', body: {} });
+    const msg = data.extracted > 0
+      ? `✅ ${data.extracted}件の書類を抽出！（${data.processed}件処理）`
+      : `処理完了（${data.processed}件中、書類は見つかりませんでした）`;
+    toast(msg, data.extracted > 0 ? 'success' : 'info');
+
+    if (data.remaining > 0) {
+      toast(`残り${data.remaining}件 — もう一度押してください`, 'info');
+    }
+
+    // 書類タブを更新
+    loadDocuments();
+    loadEmails();
+  } catch (err) {
+    toast(`スキャンエラー: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 全スキャン';
+  }
+}
 
 async function syncAccount(accountId) {
   try {
