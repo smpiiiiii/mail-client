@@ -50,6 +50,22 @@ module.exports = async (req, res) => {
         continue;
       }
 
+      // キーワード事前フィルタ（AI呼び出し前に絞り込み）
+      const subjectAndFrom = ((email.subject || '') + ' ' + (email.from || '')).toLowerCase();
+      const KEYWORDS = [
+        '請求', '領収', '注文', '購入', '決済', '支払', '振込', '入金',
+        '明細', 'invoice', 'receipt', 'order', 'payment', 'billing',
+        '納品', '見積', '御請求', '御見積', '代金', '料金', '会計',
+        'お買い上げ', 'ご利用', 'ご注文', 'お支払', '引き落とし'
+      ];
+      const hasKeyword = KEYWORDS.some(kw => subjectAndFrom.includes(kw));
+      if (!hasKeyword) {
+        // キーワードなし → 請求書・領収書ではないと判断、スキップ
+        await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
+        skipped++;
+        continue;
+      }
+
       processed++;
 
       try {

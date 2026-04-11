@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
     await client.connect();
     const lock = await client.getMailboxLock('INBOX');
     let synced = 0;
-    const BATCH_SIZE = 100; // 1回の同期で取得する最大件数
+    const BATCH_SIZE = 500; // 1回の同期で取得する最大件数（ヘッダーのみなので大量OK）
     const startTime = Date.now();
     const TIMEOUT_MS = 45000; // 45秒で切り上げ
 

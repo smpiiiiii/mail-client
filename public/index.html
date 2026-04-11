@@ -1532,24 +1532,54 @@ function initMonthSelector() {
 }
 initMonthSelector();
 
-// 全メール一括AIスキャン
+// 全メール一括AIスキャン（自動ループ版）
+let scanCancelled = false;
 async function scanAllEmails() {
   const btn = document.getElementById('scanAllBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> スキャン中...';
+  scanCancelled = false;
+
+  // キャンセルボタンに変える
+  btn.onclick = function() { scanCancelled = true; };
+  btn.innerHTML = '⏹ 停止';
+  btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
+
+  let totalProcessed = 0;
+  let totalExtracted = 0;
+  let round = 0;
 
   try {
-    const data = await api('extract-all', { method: 'POST', body: {} });
-    const msg = data.extracted > 0
-      ? `✅ ${data.extracted}件の書類を抽出！（${data.processed}件処理）`
-      : `処理完了（${data.processed}件中、書類は見つかりませんでした）`;
-    toast(msg, data.extracted > 0 ? 'success' : 'info');
+    while (!scanCancelled) {
+      round++;
+      btn.innerHTML = `⏹ 停止 (${round}回目...)`;
 
-    if (data.remaining > 0) {
-      toast(`残り${data.remaining}件 — もう一度押してください`, 'info');
+      const data = await api('extract-all', { method: 'POST', body: {} });
+      totalProcessed += data.processed || 0;
+      totalExtracted += data.extracted || 0;
+
+      if (data.extracted > 0) {
+        toast(`🤖 ${totalExtracted}件抽出済み（${totalProcessed}件処理）`, 'success');
+      }
+
+      // 残りが0なら完了
+      if (!data.remaining || data.remaining <= 0) {
+        const msg = totalExtracted > 0
+          ? `✅ 完了！${totalExtracted}件の書類を抽出（${totalProcessed}件スキャン）`
+          : `完了（${totalProcessed}件スキャン、書類は見つかりませんでした）`;
+        toast(msg, totalExtracted > 0 ? 'success' : 'info');
+        break;
+      }
+
+      // 進捗表示
+      toast(`処理中... 残り約${data.remaining}件`, 'info');
+
+      // 短い待機（API負荷軽減）
+      await new Promise(r => setTimeout(r, 500));
     }
 
-    // 書類タブを更新
+    if (scanCancelled) {
+      toast(`⏹ 停止しました（${totalExtracted}件抽出済み）`, 'info');
+    }
+
     loadDocuments();
     loadEmails();
   } catch (err) {
@@ -1557,6 +1587,8 @@ async function scanAllEmails() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🤖 全スキャン';
+    btn.style.background = 'linear-gradient(135deg,#8b5cf6,#7c3aed)';
+    btn.onclick = scanAllEmails;
   }
 }
 
