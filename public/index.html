@@ -891,11 +891,17 @@
           </button>
         </div>
       </div>
+      <!-- キーワードフィルタバー -->
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+        <input type="text" class="input" id="emailKeywordFilter" placeholder="🔍 キーワードで絞り込み..." style="flex:1;min-width:150px;padding:8px 12px;font-size:0.85rem;" oninput="filterEmailsByKeyword()">
+        <button class="btn btn-outline" id="scanFilteredBtn" onclick="scanFilteredEmails()" style="font-size:0.8rem;padding:6px 12px;white-space:nowrap;">🤖 絞り込みスキャン</button>
+      </div>
       <div class="inbox-layout">
         <!-- メール一覧 -->
         <div class="email-list">
           <div class="email-list-header">
             <span class="count" id="emailCount">0件</span>
+            <span class="count" id="filteredCount" style="color:#a5b4fc;margin-left:8px;display:none;"></span>
           </div>
           <div class="email-list-items" id="emailListItems"></div>
           <div class="email-list-pagination" id="emailPagination"></div>
@@ -1592,6 +1598,72 @@ async function scanAllEmails() {
   }
 }
 
+// メール一覧をキーワードで絞り込み表示
+function filterEmailsByKeyword() {
+  const keyword = (document.getElementById('emailKeywordFilter').value || '').trim().toLowerCase();
+  const items = document.querySelectorAll('#emailListItems .email-item');
+  const filteredEl = document.getElementById('filteredCount');
+  let shown = 0;
+
+  items.forEach(item => {
+    const subject = (item.getAttribute('data-subject') || '').toLowerCase();
+    const from = (item.getAttribute('data-from') || '').toLowerCase();
+    if (!keyword || subject.includes(keyword) || from.includes(keyword)) {
+      item.style.display = '';
+      shown++;
+    } else {
+      item.style.display = 'none';
+    }
+  });
+
+  if (keyword) {
+    filteredEl.textContent = `(${shown}件ヒット)`;
+    filteredEl.style.display = '';
+  } else {
+    filteredEl.style.display = 'none';
+  }
+}
+
+// キーワード指定付きスキャン（絞り込みスキャン）
+async function scanFilteredEmails() {
+  const keyword = (document.getElementById('emailKeywordFilter').value || '').trim();
+  if (!keyword) {
+    toast('キーワードを入力してください', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('scanFilteredBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> スキャン中...';
+
+  let totalProcessed = 0;
+  let totalExtracted = 0;
+
+  try {
+    while (true) {
+      const data = await api('extract-all', { method: 'POST', body: { keywords: keyword } });
+      totalProcessed += data.processed || 0;
+      totalExtracted += data.extracted || 0;
+
+      if (!data.remaining || data.remaining <= 0) {
+        const msg = totalExtracted > 0
+          ? `✅ 「${keyword}」から${totalExtracted}件の書類を抽出！`
+          : `「${keyword}」に該当する書類は見つかりませんでした`;
+        toast(msg, totalExtracted > 0 ? 'success' : 'info');
+        break;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+    loadDocuments();
+    loadEmails();
+  } catch (err) {
+    toast(`スキャンエラー: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 絞り込みスキャン';
+  }
+}
+
 async function syncAccount(accountId) {
   try {
     toast('同期中...', 'info');
@@ -1648,7 +1720,7 @@ function renderEmailList(emails, total, page, pages) {
     const activeClass = email.id === currentEmailId ? 'active' : '';
 
     return `
-      <div class="email-item ${unreadClass} ${activeClass}" onclick="selectEmail('${email.id}')">
+      <div class="email-item ${unreadClass} ${activeClass}" onclick="selectEmail('${email.id}')" data-subject="${escapeHtml(email.subject)}" data-from="${escapeHtml(email.fromName || email.from)}">
         <div class="email-avatar" style="background:${color}">${initials}</div>
         <div class="email-info">
           <div class="email-sender">

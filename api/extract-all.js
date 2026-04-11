@@ -20,6 +20,9 @@ module.exports = async (req, res) => {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) return res.status(500).json({ error: 'Gemini APIキーが設定されていません' });
 
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  const userKeywords = body.keywords ? body.keywords.split(/[,、\s]+/).filter(k => k.trim()) : null;
+
   const redis = getRedis();
   const startTime = Date.now();
   const TIMEOUT = 45000; // 45秒で切り上げ
@@ -44,21 +47,21 @@ module.exports = async (req, res) => {
       const email = await redis.hgetall(`mail:email:${emailId}`);
       if (!email || !email.id) continue;
 
-      // 既に抽出済みならスキップ
-      if (email.extracted === '1') {
+      // 既に抽出済みならスキップ（ユーザーキーワード指定時は再スキャン対象）
+      if (email.extracted === '1' && !userKeywords) {
         skipped++;
         continue;
       }
 
       // キーワード事前フィルタ（AI呼び出し前に絞り込み）
       const subjectAndFrom = ((email.subject || '') + ' ' + (email.from || '')).toLowerCase();
-      const KEYWORDS = [
+      const KEYWORDS = userKeywords || [
         '請求', '領収', '注文', '購入', '決済', '支払', '振込', '入金',
         '明細', 'invoice', 'receipt', 'order', 'payment', 'billing',
         '納品', '見積', '御請求', '御見積', '代金', '料金', '会計',
         'お買い上げ', 'ご利用', 'ご注文', 'お支払', '引き落とし'
       ];
-      const hasKeyword = KEYWORDS.some(kw => subjectAndFrom.includes(kw));
+      const hasKeyword = KEYWORDS.some(kw => subjectAndFrom.toLowerCase().includes(kw.toLowerCase()));
       if (!hasKeyword) {
         // キーワードなし → 請求書・領収書ではないと判断、スキップ
         await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
