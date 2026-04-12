@@ -55,39 +55,24 @@ module.exports = async (req, res) => {
       }
 
       // キーワード事前フィルタ（AI呼び出し前に絞り込み）
-      // 件名のみでチェック（差出人は誤マッチが多いため除外）
-      const subject = (email.subject || '').toLowerCase();
+      // 件名と本文の両方でチェック
+      const searchText = ((email.subject || '') + ' ' + (email.bodyText || '').substring(0, 500)).toLowerCase();
       const KEYWORDS = userKeywords || [
-        // 請求・領収系（最も確実）
         '請求', '領収', '御請求', '御見積',
-        // 決済・支払系
         '決済', '支払', '引き落とし', '振込', '入金',
-        // 購入・注文系
         '注文確認', '購入', 'ご注文', 'お買い上げ',
-        // 明細系
         '明細', '利用明細', '取引明細',
-        // 英語
         'invoice', 'receipt', 'payment', 'billing',
-        // その他
-        '納品', '見積書', '代金'
+        '納品', '見積書', '代金', '料金'
       ];
-      // 除外キーワード（ニュース・プロモーション・通知系を弾く）
-      const EXCLUDE = [
-        'キャンペーン', 'セール', 'お知らせ', 'ニュース', '新着',
-        'アップデート', '更新のお知らせ', 'メルマガ', 'プレゼント',
-        '急募', '募集', '障害', 'failure', 'failed', 'ログイン通知',
-        'セキュリティ', '認証', 'パスワード', '事例', '紹介'
-      ];
-      const hasExclude = EXCLUDE.some(kw => subject.includes(kw.toLowerCase()));
-      const hasKeyword = KEYWORDS.some(kw => subject.includes(kw.toLowerCase()));
-      if (!hasKeyword || hasExclude) {
-        // キーワードなし or 除外対象 → スキップ
+      const hasKeyword = KEYWORDS.some(kw => searchText.includes(kw.toLowerCase()));
+      if (!hasKeyword) {
         await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
         filtered++;
         continue;
       }
 
-      console.log(`🔍 キーワードマッチ: "${(email.subject || '').substring(0, 50)}" from ${(email.from || '').substring(0, 30)}`);
+      console.log(`🔍 マッチ: "${(email.subject || '').substring(0, 50)}"`);
 
       processed++;
 
