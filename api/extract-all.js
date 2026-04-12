@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
     let processed = 0;
     let extracted = 0;
     let skipped = 0;
+    let filtered = 0; // キーワードフィルタで除外した件数
     let errors = 0;
     const results = [];
 
@@ -65,9 +66,11 @@ module.exports = async (req, res) => {
       if (!hasKeyword) {
         // キーワードなし → 請求書・領収書ではないと判断、スキップ
         await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
-        skipped++;
+        filtered++;
         continue;
       }
+
+      console.log(`🔍 キーワードマッチ: "${(email.subject || '').substring(0, 50)}" from ${(email.from || '').substring(0, 30)}`);
 
       processed++;
 
@@ -124,19 +127,22 @@ module.exports = async (req, res) => {
     }
 
     // 残りの未抽出メール数を計算
-    const remaining = emailIds.length - skipped - processed;
+    const remaining = emailIds.length - skipped - processed - filtered;
+
+    console.log(`📊 スキャン結果: 処理${processed} 抽出${extracted} 既済${skipped} フィルタ除外${filtered} エラー${errors} 残り${remaining}`);
 
     return res.json({
       success: true,
       processed,
       extracted,
       skipped,
+      filtered,
       errors,
       remaining: Math.max(0, remaining),
       results,
       message: remaining > 0
-        ? `${processed}件処理、${extracted}件抽出。残り${remaining}件（もう一度実行してください）`
-        : `全${processed}件処理完了、${extracted}件の書類を抽出しました`
+        ? `${processed}件処理(${filtered}件除外)、${extracted}件抽出。残り${remaining}件`
+        : `全${processed + filtered}件完了（AI処理:${processed} フィルタ除外:${filtered} 抽出:${extracted}件）`
     });
   } catch (e) {
     console.error('一括抽出エラー:', e);

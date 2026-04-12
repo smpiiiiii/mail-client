@@ -1563,14 +1563,15 @@ async function scanAllEmails() {
       totalExtracted += data.extracted || 0;
 
       if (data.extracted > 0) {
-        toast(`🤖 ${totalExtracted}件抽出済み（${totalProcessed}件処理）`, 'success');
+        toast(`🤖 ${totalExtracted}件抽出済み（AI処理:${totalProcessed}件）`, 'success');
       }
 
       // 残りが0なら完了
       if (!data.remaining || data.remaining <= 0) {
+        const filtered = data.filtered || 0;
         const msg = totalExtracted > 0
-          ? `✅ 完了！${totalExtracted}件の書類を抽出（${totalProcessed}件スキャン）`
-          : `完了（${totalProcessed}件スキャン、書類は見つかりませんでした）`;
+          ? `✅ 完了！${totalExtracted}件の書類を抽出（AI:${totalProcessed}件, フィルタ除外:${filtered}件）`
+          : `完了（AI:${totalProcessed}件, フィルタ除外:${filtered}件, 書類なし）`;
         toast(msg, totalExtracted > 0 ? 'success' : 'info');
         break;
       }
