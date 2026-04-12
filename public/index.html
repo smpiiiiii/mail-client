@@ -1549,6 +1549,7 @@ async function scanAllEmails() {
   btn.innerHTML = '⏹ 停止';
   btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
   toast('🔄 スキャン開始...', 'info');
+  console.log('scanAllEmails called - v2');
 
   let totalProcessed = 0;
   let totalExtracted = 0;
