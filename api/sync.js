@@ -96,7 +96,8 @@ module.exports = async (req, res) => {
       }
 
       for await (const msg of client.fetch(uidRange, {
-        uid: true, envelope: true, bodyStructure: true
+        uid: true, envelope: true, bodyStructure: true,
+        source: { maxSize: 32768 } // メール全文を最大32KBまで取得
       }, { uid: true })) {
         // タイムアウトチェック
         if (Date.now() - startTime > TIMEOUT_MS) break;
@@ -129,7 +130,43 @@ module.exports = async (req, res) => {
         const fromName = fromAddr.name || '';
         const toAddr = env.to && env.to[0] ? env.to[0] : {};
 
-        // メールをRedisに保存（本文なし — 閲覧時にIMAPから取得）
+        // メール本文をsourceから抽出
+        let bodyText = '';
+        let bodyPreview = '';
+        if (msg.source) {
+          const raw = msg.source.toString('utf8');
+          // テキスト本文を簡易抽出（ヘッダー除去後）
+          const bodyStart = raw.indexOf('\r\n\r\n');
+          if (bodyStart > -1) {
+            let rawBody = raw.substring(bodyStart + 4);
+            // quoted-printable / base64 デコード試行
+            if (raw.toLowerCase().includes('content-transfer-encoding: base64')) {
+              try {
+                // base64部分を取得（マルチパートの場合は最初のテキストパート）
+                const parts = rawBody.split(/--[^\r\n]+/);
+                for (const part of parts) {
+                  if (part.toLowerCase().includes('text/plain') || (!part.includes('text/html') && part.trim().length > 20)) {
+                    const partBody = part.indexOf('\r\n\r\n');
+                    if (partBody > -1) {
+                      const b64 = part.substring(partBody + 4).replace(/[\r\n\s]/g, '');
+                      try {
+                        rawBody = Buffer.from(b64, 'base64').toString('utf8');
+                        break;
+                      } catch {}
+                    }
+                  }
+                }
+              } catch {}
+            } else if (raw.toLowerCase().includes('content-transfer-encoding: quoted-printable')) {
+              rawBody = rawBody.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+            }
+            // HTMLタグ除去
+            bodyText = rawBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
+            bodyPreview = bodyText.substring(0, 200);
+          }
+        }
+
+        // メールをRedisに保存（本文も含む）
         await redis.hset(`mail:email:${emailId}`, {
           id: emailId,
           accountId,
@@ -141,8 +178,8 @@ module.exports = async (req, res) => {
           to: toAddr.address || '',
           date: env.date ? new Date(env.date).toISOString() : new Date().toISOString(),
           timestamp: timestamp.toString(),
-          bodyPreview: '',
-          bodyText: '',
+          bodyPreview: bodyPreview,
+          bodyText: bodyText,
           bodyHtml: '',
           hasAttachment: attachments.length > 0 ? '1' : '0',
           attachments: JSON.stringify(attachments),
