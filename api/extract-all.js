@@ -56,7 +56,7 @@ module.exports = async (req, res) => {
 
       // キーワード事前フィルタ（AI呼び出し前に絞り込み）
       // 件名と本文の両方でチェック
-      const searchText = ((email.subject || '') + ' ' + (email.bodyText || '').substring(0, 500)).toLowerCase();
+      const searchText = ((email.subject || '') + ' ' + (email.bodyText || '')).toLowerCase();
       const KEYWORDS = userKeywords || [
         '請求', '領収', '御請求', '御見積',
         '決済', '支払', '引き落とし', '振込', '入金',
