@@ -1548,6 +1548,7 @@ async function scanAllEmails() {
   btn.onclick = function() { scanCancelled = true; };
   btn.innerHTML = '⏹ 停止';
   btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
+  toast('🔄 スキャン開始...', 'info');
 
   let totalProcessed = 0;
   let totalExtracted = 0;
@@ -1559,20 +1560,26 @@ async function scanAllEmails() {
       round++;
       btn.innerHTML = `⏹ 停止 (${round}回目...)`;
 
-      const data = await api('extract-all', { method: 'POST', body: {} });
+      let data;
+      try {
+        data = await api('extract-all', { method: 'POST', body: {} });
+      } catch (apiErr) {
+        toast(`❌ API応答エラー: ${apiErr.message}`, 'error');
+        break;
+      }
+
       totalProcessed += data.processed || 0;
       totalExtracted += data.extracted || 0;
       totalFiltered += data.filtered || 0;
 
-      if (data.extracted > 0) {
-        toast(`🤖 ${totalExtracted}件抽出済み（AI処理:${totalProcessed}件）`, 'success');
-      }
+      // 毎回進捗トースト表示
+      toast(`📊 ${round}回目: AI ${data.processed || 0}件, 除外 ${data.filtered || 0}件, 抽出 ${data.extracted || 0}件`, 'info');
 
       // 残りが0なら完了
       if (!data.remaining || data.remaining <= 0) {
         const msg = totalExtracted > 0
           ? `✅ 完了！${totalExtracted}件の書類を抽出（AI:${totalProcessed}件, 除外:${totalFiltered}件）`
-          : `完了（AI処理:${totalProcessed}件, フィルタ除外:${totalFiltered}件, 書類なし）`;
+          : `✅ 完了（AI処理:${totalProcessed}件, フィルタ除外:${totalFiltered}件, 書類なし）`;
         toast(msg, totalExtracted > 0 ? 'success' : 'info');
         break;
       }
@@ -1592,6 +1599,7 @@ async function scanAllEmails() {
     loadEmails();
   } catch (err) {
     toast(`スキャンエラー: ${err.message}`, 'error');
+    console.error('scanAllEmails error:', err);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🤖 全スキャン';
