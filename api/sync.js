@@ -59,22 +59,49 @@ module.exports = async (req, res) => {
       const lastUid = parseInt(account.lastSyncedUid) || 0;
       let maxUid = lastUid;
 
+      // 財務系キーワード（IMAP SEARCH用）
+      const FINANCE_KEYWORDS = [
+        '請求', '領収', '決済', '支払', '振込', '入金',
+        '注文', '購入', '明細', '引き落とし', '料金',
+        '納品', '見積', '代金',
+        'invoice', 'receipt', 'payment', 'billing', 'order'
+      ];
+
+      // 各キーワードで IMAP SEARCH を実行し、UIDを集める
+      const uidSet = new Set();
+      const dateFilter = {};
       if (month) {
-        // 月指定: その月の初日〜末日のメールを取得
         const [year, mon] = month.split('-').map(Number);
-        const since = new Date(year, mon - 1, 1);
-        const before = new Date(year, mon, 1); // 翌月1日
-        uidsToFetch = await client.search({ since, before }, { uid: true });
+        dateFilter.since = new Date(year, mon - 1, 1);
+        dateFilter.before = new Date(year, mon, 1);
       } else if (lastUid > 0) {
-        // 差分同期: 前回以降のUIDを取得
-        uidsToFetch = await client.search({ uid: `${lastUid + 1}:*` }, { uid: true });
-        uidsToFetch = uidsToFetch.filter(u => u > lastUid);
+        // 差分同期: UID指定（キーワード検索と組み合わせ）
       } else {
-        // 初回: 過去30日のメール
         const since = new Date();
-        since.setDate(since.getDate() - 30);
-        uidsToFetch = await client.search({ since }, { uid: true });
+        since.setDate(since.getDate() - 90); // 過去90日に拡大（フィルタで絞るので多めでOK）
+        dateFilter.since = since;
       }
+
+      for (const kw of FINANCE_KEYWORDS) {
+        try {
+          // 件名 OR 本文でキーワード検索
+          const query = { ...dateFilter, or: [{ subject: kw }, { body: kw }] };
+          if (lastUid > 0 && !month) {
+            query.uid = `${lastUid + 1}:*`;
+          }
+          const results = await client.search(query, { uid: true });
+          for (const uid of results) {
+            if (lastUid > 0 && uid <= lastUid && !month) continue;
+            uidSet.add(uid);
+          }
+        } catch (searchErr) {
+          // 一部キーワードの検索失敗は無視して続行
+          console.log(`IMAP検索スキップ: "${kw}" - ${searchErr.message}`);
+        }
+      }
+
+      uidsToFetch = Array.from(uidSet);
+      console.log(`📬 IMAP検索: ${FINANCE_KEYWORDS.length}キーワードで ${uidsToFetch.length}件ヒット`);
 
       if (uidsToFetch.length === 0) {
         lock.release();
