@@ -53,11 +53,10 @@ module.exports = async (req, res) => {
     const startTime = Date.now();
     const TIMEOUT_MS = 45000; // 45秒で切り上げ
 
+    let uidsToFetch;
     try {
       const lastUid = parseInt(account.lastSyncedUid) || 0;
       let maxUid = lastUid;
-
-      let uidsToFetch;
 
       if (month) {
         // 月指定: その月の初日〜末日のメールを取得
@@ -210,6 +209,8 @@ module.exports = async (req, res) => {
 
       lock.release();
     } catch (e) {
+      console.error('同期内部エラー:', e.message);
+      try { lock.release(); } catch {}
       throw e;
     }
 
