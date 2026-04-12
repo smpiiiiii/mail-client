@@ -55,16 +55,33 @@ module.exports = async (req, res) => {
       }
 
       // キーワード事前フィルタ（AI呼び出し前に絞り込み）
-      const subjectAndFrom = ((email.subject || '') + ' ' + (email.from || '')).toLowerCase();
+      // 件名のみでチェック（差出人は誤マッチが多いため除外）
+      const subject = (email.subject || '').toLowerCase();
       const KEYWORDS = userKeywords || [
-        '請求', '領収', '注文', '購入', '決済', '支払', '振込', '入金',
-        '明細', 'invoice', 'receipt', 'order', 'payment', 'billing',
-        '納品', '見積', '御請求', '御見積', '代金', '料金', '会計',
-        'お買い上げ', 'ご利用', 'ご注文', 'お支払', '引き落とし'
+        // 請求・領収系（最も確実）
+        '請求', '領収', '御請求', '御見積',
+        // 決済・支払系
+        '決済', '支払', '引き落とし', '振込', '入金',
+        // 購入・注文系
+        '注文確認', '購入', 'ご注文', 'お買い上げ',
+        // 明細系
+        '明細', '利用明細', '取引明細',
+        // 英語
+        'invoice', 'receipt', 'payment', 'billing',
+        // その他
+        '納品', '見積書', '代金'
       ];
-      const hasKeyword = KEYWORDS.some(kw => subjectAndFrom.toLowerCase().includes(kw.toLowerCase()));
-      if (!hasKeyword) {
-        // キーワードなし → 請求書・領収書ではないと判断、スキップ
+      // 除外キーワード（ニュース・プロモーション・通知系を弾く）
+      const EXCLUDE = [
+        'キャンペーン', 'セール', 'お知らせ', 'ニュース', '新着',
+        'アップデート', '更新のお知らせ', 'メルマガ', 'プレゼント',
+        '急募', '募集', '障害', 'failure', 'failed', 'ログイン通知',
+        'セキュリティ', '認証', 'パスワード', '事例', '紹介'
+      ];
+      const hasExclude = EXCLUDE.some(kw => subject.includes(kw.toLowerCase()));
+      const hasKeyword = KEYWORDS.some(kw => subject.includes(kw.toLowerCase()));
+      if (!hasKeyword || hasExclude) {
+        // キーワードなし or 除外対象 → スキップ
         await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
         filtered++;
         continue;
