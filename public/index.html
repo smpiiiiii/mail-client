@@ -1551,6 +1551,7 @@ async function scanAllEmails() {
 
   let totalProcessed = 0;
   let totalExtracted = 0;
+  let totalFiltered = 0;
   let round = 0;
 
   try {
@@ -1561,6 +1562,7 @@ async function scanAllEmails() {
       const data = await api('extract-all', { method: 'POST', body: {} });
       totalProcessed += data.processed || 0;
       totalExtracted += data.extracted || 0;
+      totalFiltered += data.filtered || 0;
 
       if (data.extracted > 0) {
         toast(`🤖 ${totalExtracted}件抽出済み（AI処理:${totalProcessed}件）`, 'success');
@@ -1568,10 +1570,9 @@ async function scanAllEmails() {
 
       // 残りが0なら完了
       if (!data.remaining || data.remaining <= 0) {
-        const filtered = data.filtered || 0;
         const msg = totalExtracted > 0
-          ? `✅ 完了！${totalExtracted}件の書類を抽出（AI:${totalProcessed}件, フィルタ除外:${filtered}件）`
-          : `完了（AI:${totalProcessed}件, フィルタ除外:${filtered}件, 書類なし）`;
+          ? `✅ 完了！${totalExtracted}件の書類を抽出（AI:${totalProcessed}件, 除外:${totalFiltered}件）`
+          : `完了（AI処理:${totalProcessed}件, フィルタ除外:${totalFiltered}件, 書類なし）`;
         toast(msg, totalExtracted > 0 ? 'success' : 'info');
         break;
       }
