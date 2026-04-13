@@ -226,8 +226,10 @@ module.exports = async (req, res) => {
         // === AI抽出（取込と同時に実行） ===
         if (geminiKey && (bodyText || pdfText)) {
           try {
+            console.log(`🔍 AI送信: "${subject.substring(0, 50)}" body:${bodyText.length}文字 pdf:${pdfText.length}文字`);
             const prompt = buildBodyPrompt(subject, fromText, fullText);
             const result = await callGemini(geminiKey, prompt);
+            console.log(`📋 AI結果: type=${result?.type} vendor=${result?.vendor} amount=${result?.amount}`);
 
             if (result && result.type !== 'none') {
               const docId = genId();
@@ -255,11 +257,13 @@ module.exports = async (req, res) => {
               console.log(`✅ 抽出: ${doc.type} ${doc.vendor} ¥${doc.amount} ← "${subject.substring(0, 40)}"`);
             } else {
               await redis.hset(`mail:email:${emailId}`, { extracted: '1' });
+              console.log(`⏭️ 該当なし: "${subject.substring(0, 40)}"`);
             }
           } catch (aiErr) {
-            console.error(`AI抽出エラー: ${aiErr.message} ← "${subject.substring(0, 30)}"`);
-            // AI失敗してもメール自体は保存済み、後でスキャン可能
+            console.error(`❌ AI抽出エラー: ${aiErr.message} ← "${subject.substring(0, 30)}"`);
           }
+        } else {
+          console.log(`⚠️ 本文なし: "${(env.subject || '').substring(0, 40)}" body:${bodyText.length} pdf:${pdfText.length}`);
         }
       }
 
