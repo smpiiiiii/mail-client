@@ -1,8 +1,12 @@
 /**
  * メールデータリセットAPI
  * POST /api/reset — ユーザーのメールデータを全削除（再同期用）
+ * パイプラインで高速削除
  */
 const { getRedis, getUser, cors } = require('./helpers');
+
+// タイムアウト延長
+module.exports.maxDuration = 30;
 
 module.exports = async (req, res) => {
   cors(res);
@@ -14,16 +18,20 @@ module.exports = async (req, res) => {
 
   const redis = getRedis();
 
-  // ユーザーのメールID一覧を取得
+  // メールID一覧取得
   const emailIds = await redis.zrange(`mail:user:${user.id}:emails`, 0, -1) || [];
 
-  // 各メールデータを削除
-  for (const id of emailIds) {
-    await redis.del(`mail:email:${id}`);
-  }
-
-  // ソートセットをクリア
+  // パイプラインでバッチ削除（タイムアウト防止）
   if (emailIds.length > 0) {
+    const batchSize = 100;
+    for (let i = 0; i < emailIds.length; i += batchSize) {
+      const batch = emailIds.slice(i, i + batchSize);
+      const p = redis.pipeline();
+      for (const id of batch) {
+        p.del(`mail:email:${id}`);
+      }
+      await p.exec();
+    }
     await redis.del(`mail:user:${user.id}:emails`);
   }
 
@@ -34,12 +42,14 @@ module.exports = async (req, res) => {
     await redis.hset(`mail:account:${accId}`, { lastSyncedUid: '0', lastSynced: '' });
   }
 
-  // 書類データもクリア
+  // 書類データもバッチ削除
   const docIds = await redis.zrange(`mail:user:${user.id}:docs`, 0, -1) || [];
-  for (const id of docIds) {
-    await redis.del(`mail:doc:${id}`);
-  }
   if (docIds.length > 0) {
+    const p = redis.pipeline();
+    for (const id of docIds) {
+      p.del(`mail:doc:${id}`);
+    }
+    await p.exec();
     await redis.del(`mail:user:${user.id}:docs`);
   }
 
@@ -47,6 +57,6 @@ module.exports = async (req, res) => {
     success: true,
     deleted: emailIds.length,
     docsDeleted: docIds.length,
-    message: `${emailIds.length}件のメール + ${docIds.length}件の書類データを削除しました`
+    message: `${emailIds.length}件のメール + ${docIds.length}件の書類を削除しました`
   });
 };

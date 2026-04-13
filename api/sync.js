@@ -54,7 +54,7 @@ module.exports = async (req, res) => {
     const lock = await client.getMailboxLock('INBOX');
     let synced = 0;
     let extracted = 0;
-    const BATCH_SIZE = 100;
+    const BATCH_SIZE = 50;
     const startTime = Date.now();
     const TIMEOUT_MS = 50000; // 50秒で切り上げ
 
@@ -65,10 +65,10 @@ module.exports = async (req, res) => {
 
       // 財務系キーワード（IMAP SEARCH用）
       const FINANCE_KEYWORDS = [
-        '請求', '領収', '決済', '支払', '振込', '入金',
-        '注文', '購入', '明細', '引き落とし', '料金',
-        '納品', '見積', '代金',
-        'invoice', 'receipt', 'payment', 'billing', 'order'
+        '請求', '領収', '御請求', '御見積',
+        '決済', '支払', '振込', '入金',
+        '引き落とし', '明細', '納品書',
+        'invoice', 'receipt', 'payment', 'billing'
       ];
 
       // 各キーワードでIMAP SEARCHし、UIDを集約
@@ -88,7 +88,8 @@ module.exports = async (req, res) => {
 
       for (const kw of FINANCE_KEYWORDS) {
         try {
-          const query = { ...dateFilter, or: [{ subject: kw }, { body: kw }] };
+          // 件名のみで検索（本文検索は遅いため）
+          const query = { ...dateFilter, subject: kw };
           if (lastUid > 0 && !month) query.uid = `${lastUid + 1}:*`;
           const results = await client.search(query, { uid: true });
           for (const uid of results) {
@@ -101,7 +102,7 @@ module.exports = async (req, res) => {
       }
 
       uidsToFetch = Array.from(uidSet);
-      console.log(`📬 IMAP検索: ${uidsToFetch.length}件ヒット`);
+      console.log(`📬 IMAP検索: ${FINANCE_KEYWORDS.length}キーワードで ${uidsToFetch.length}件ヒット`);
 
       if (uidsToFetch.length === 0) {
         lock.release();
