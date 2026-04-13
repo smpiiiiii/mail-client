@@ -1029,7 +1029,7 @@
         <div class="settings-section">
           <h3>⚠️ データ管理</h3>
           <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">メールデータに問題がある場合、全データを削除して再同期できます。</p>
-          <button class="btn btn-danger" onclick="resetData()">🗑️ メールデータをリセット</button>
+          <button class="btn btn-danger" id="resetDataBtn" onclick="resetData()">🗑️ メールデータをリセット</button>
         </div>
       </div>
     </section>
@@ -1054,12 +1054,13 @@ let isRegisterMode = false;
 // データリセット
 async function resetData() {
   if (!confirm('メールデータと抽出書類をすべて削除します。よろしいですか？')) return;
-  const btn = event.target;
+  const btn = document.getElementById('resetDataBtn');
   btn.disabled = true;
   btn.textContent = '⏳ リセット中...';
   try {
     const data = await api('reset', { method: 'POST' });
     toast(data.message || '✅ リセット完了', 'success');
+    localStorage.removeItem('mailextract_emails');
     loadEmails();
     loadDocuments();
   } catch (err) {
@@ -1993,11 +1994,18 @@ async function loadDocuments() {
   if (month) params.set('month', month);
   if (type) params.set('type', type);
 
+  // ローディング表示
+  document.getElementById('statTotal').textContent = '...';
+  document.getElementById('statInvoice').textContent = '...';
+  document.getElementById('statReceipt').textContent = '...';
+  document.getElementById('docTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;"><span class="spinner"></span> 読み込み中...</td></tr>';
+
   try {
     const data = await api(`documents?${params}`);
     renderDocuments(data.documents, data.summary, data.months);
   } catch (err) {
     console.error('書類取得エラー:', err);
+    document.getElementById('docTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted);">読み込みに失敗しました</td></tr>';
   }
 }
 
