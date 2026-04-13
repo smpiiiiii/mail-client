@@ -5,6 +5,9 @@
  */
 const { getRedis, getUser, cors } = require('./helpers');
 
+// タイムアウト防止
+module.exports.maxDuration = 30;
+
 module.exports = async (req, res) => {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -16,15 +19,26 @@ module.exports = async (req, res) => {
   const redis = getRedis();
   const url = new URL(req.url, `http://${req.headers.host}`);
   const format = url.searchParams.get('format');
-  const month = url.searchParams.get('month'); // YYYY-MM
-  const type = url.searchParams.get('type');   // 請求書 | 領収書 | all
+  const month = url.searchParams.get('month');
+  const type = url.searchParams.get('type');
 
-  // 全ドキュメント取得（新しい順）
+  // 全ドキュメントID取得（新しい順）
   const docIds = await redis.zrange(`mail:user:${user.id}:docs`, 0, -1, { rev: true }) || [];
 
-  let documents = [];
+  if (docIds.length === 0) {
+    return res.json({ documents: [], summary: { total: 0, invoiceTotal: 0, receiptTotal: 0, count: 0, invoiceCount: 0, receiptCount: 0 }, months: [] });
+  }
+
+  // パイプラインでバッチ取得（1件ずつ取得するとタイムアウトするため）
+  const p = redis.pipeline();
   for (const id of docIds) {
-    const doc = await redis.hgetall(`mail:doc:${id}`);
+    p.hgetall(`mail:doc:${id}`);
+  }
+  const results = await p.exec();
+
+  let documents = [];
+  for (let i = 0; i < results.length; i++) {
+    const doc = results[i];
     if (doc && doc.id) {
       try {
         doc.items = typeof doc.items === 'string' ? JSON.parse(doc.items) : (doc.items || []);
@@ -47,7 +61,7 @@ module.exports = async (req, res) => {
 
   // --- CSVエクスポート ---
   if (format === 'csv') {
-    const bom = '\uFEFF'; // Excel日本語対応
+    const bom = '\uFEFF';
     const header = '種別,取引先,日付,金額(税込),税抜,消費税,品目,信頼度,メール件名\n';
     const rows = documents.map(d =>
       [
@@ -78,7 +92,6 @@ module.exports = async (req, res) => {
     receiptCount: documents.filter(d => d.type === '領収書').length,
   };
 
-  // 月別利用可能な月リスト（フィルターUI用）
   const months = [...new Set(documents.map(d => d.date ? d.date.substring(0, 7) : '').filter(Boolean))].sort().reverse();
 
   return res.json({ documents, summary, months });
