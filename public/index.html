@@ -883,11 +883,8 @@
           <select class="input" id="syncMonthSelect" style="width:140px;padding:6px 10px;font-size:0.82rem;">
             <option value="">最新</option>
           </select>
-          <button class="btn btn-primary" id="syncBtn" onclick="syncEmails()">
-            🔄 取込
-          </button>
-          <button class="btn" id="scanAllBtn" onclick="scanAllEmails()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;">
-            🤖 全スキャン
+          <button class="btn btn-primary" id="syncBtn" onclick="syncEmails()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;">
+            📥 取込+抽出
           </button>
         </div>
       </div>
@@ -1499,12 +1496,14 @@ async function syncEmails() {
     return;
   }
 
-  const month = document.getElementById('syncMonthSelect').value; // "" or "2026-04"
+  const month = document.getElementById('syncMonthSelect').value;
   const btn = document.getElementById('syncBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 同期中...';
+  btn.innerHTML = '<span class="spinner"></span> 検索+抽出中...';
+  toast('📥 財務メールを検索中...', 'info');
 
   let totalSynced = 0;
+  let totalExtracted = 0;
   try {
     for (const acc of accounts) {
       try {
@@ -1512,16 +1511,24 @@ async function syncEmails() {
         if (month) body.month = month;
         const data = await api('sync', { method: 'POST', body });
         totalSynced += data.synced || 0;
+        totalExtracted += data.extracted || 0;
       } catch (err) {
         toast(`${acc.email}: ${err.message}`, 'error');
       }
     }
-    toast(`同期完了！ ${totalSynced}件取得`, 'success');
+    if (totalExtracted > 0) {
+      toast(`✅ 完了！${totalSynced}件取込、${totalExtracted}件の書類を抽出`, 'success');
+    } else if (totalSynced > 0) {
+      toast(`📥 ${totalSynced}件取込（書類は見つかりませんでした）`, 'info');
+    } else {
+      toast('新しい対象メールはありません', 'info');
+    }
     loadEmails();
+    loadDocuments();
     loadAccounts();
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔄 取込';
+    btn.innerHTML = '📥 取込+抽出';
   }
 }
 
