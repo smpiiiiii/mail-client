@@ -949,6 +949,14 @@
             <option value="請求書">📄 請求書</option>
             <option value="領収書">🧾 領収書</option>
           </select>
+          <select class="input" id="docSortSelect" onchange="sortDocuments()" style="width:160px;">
+            <option value="date-desc">日付 新→古</option>
+            <option value="date-asc">日付 古→新</option>
+            <option value="amount-desc">金額 高→低</option>
+            <option value="amount-asc">金額 低→高</option>
+            <option value="type">種別順</option>
+            <option value="vendor">取引先順</option>
+          </select>
         </div>
 
         <table class="doc-table" id="docTable">
@@ -1993,7 +2001,11 @@ async function loadDocuments() {
   }
 }
 
+let cachedDocuments = []; // ソート用にキャッシュ
+
 function renderDocuments(documents, summary, months) {
+  cachedDocuments = documents;
+
   // 集計カード
   document.getElementById('statTotal').textContent = formatYen(summary.total);
   document.getElementById('statInvoice').textContent = `${summary.invoiceCount}件 (${formatYen(summary.invoiceTotal)})`;
@@ -2005,7 +2017,27 @@ function renderDocuments(documents, summary, months) {
   monthSelect.innerHTML = '<option value="">全期間</option>' +
     (months || []).map(m => `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>${m}</option>`).join('');
 
-  // テーブル
+  // ソート適用してテーブル描画
+  sortDocuments();
+}
+
+function sortDocuments() {
+  const sortKey = document.getElementById('docSortSelect').value;
+  const docs = [...cachedDocuments];
+
+  switch (sortKey) {
+    case 'date-desc': docs.sort((a, b) => (b.date || '').localeCompare(a.date || '')); break;
+    case 'date-asc': docs.sort((a, b) => (a.date || '').localeCompare(b.date || '')); break;
+    case 'amount-desc': docs.sort((a, b) => (b.amount || 0) - (a.amount || 0)); break;
+    case 'amount-asc': docs.sort((a, b) => (a.amount || 0) - (b.amount || 0)); break;
+    case 'type': docs.sort((a, b) => (a.type || '').localeCompare(b.type || '')); break;
+    case 'vendor': docs.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || '')); break;
+  }
+
+  renderDocTable(docs);
+}
+
+function renderDocTable(documents) {
   const tbody = document.getElementById('docTableBody');
   if (documents.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">まだ抽出された書類がありません</td></tr>';
