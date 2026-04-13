@@ -1045,12 +1045,20 @@ let isRegisterMode = false;
 
 // データリセット
 async function resetData() {
+  if (!confirm('メールデータと抽出書類をすべて削除します。よろしいですか？')) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ リセット中...';
   try {
     const data = await api('reset', { method: 'POST' });
-    toast(data.message || 'リセット完了', 'success');
+    toast(data.message || '✅ リセット完了', 'success');
     loadEmails();
+    loadDocuments();
   } catch (err) {
     toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ メールデータをリセット';
   }
 }
 
