@@ -2059,10 +2059,14 @@ function renderDocTable(documents) {
 }
 
 // 書類行クリック → 受信箱のメールを開く
-function jumpToEmail(emailId) {
-  if (!emailId) return;
+async function jumpToEmail(emailId) {
+  if (!emailId) { toast('メールIDがありません', 'error'); return; }
   showSection('inbox');
-  selectEmail(emailId);
+  try {
+    await selectEmail(emailId);
+  } catch (err) {
+    toast('元のメールが見つかりません（リセット後の可能性）', 'info');
+  }
 }
 
 async function exportCSV() {
