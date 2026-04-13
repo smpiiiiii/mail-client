@@ -1051,10 +1051,28 @@ let currentEmailId = null;
 let currentPage = 1;
 let isRegisterMode = false;
 
-// データリセット
-async function resetData() {
-  if (!confirm('メールデータと抽出書類をすべて削除します。よろしいですか？')) return;
+// データリセット（2段タップ方式）
+let resetConfirmTimer = null;
+function resetData() {
   const btn = document.getElementById('resetDataBtn');
+  if (btn.dataset.confirm === 'yes') {
+    // 2回目タップ → 実行
+    clearTimeout(resetConfirmTimer);
+    btn.dataset.confirm = '';
+    doReset(btn);
+  } else {
+    // 1回目タップ → 確認表示
+    btn.dataset.confirm = 'yes';
+    btn.textContent = '⚠️ 本当に削除する？もう一度タップ';
+    btn.style.animation = 'pulse 0.5s';
+    resetConfirmTimer = setTimeout(() => {
+      btn.dataset.confirm = '';
+      btn.textContent = '🗑️ メールデータをリセット';
+      btn.style.animation = '';
+    }, 5000);
+  }
+}
+async function doReset(btn) {
   btn.disabled = true;
   btn.textContent = '⏳ リセット中...';
   try {
@@ -1068,6 +1086,7 @@ async function resetData() {
   } finally {
     btn.disabled = false;
     btn.textContent = '🗑️ メールデータをリセット';
+    btn.style.animation = '';
   }
 }
 
