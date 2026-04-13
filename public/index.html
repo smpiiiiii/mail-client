@@ -1361,6 +1361,17 @@ function logout() {
 function enterApp() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('appView').classList.add('active');
+
+  // キャッシュから即座に表示（ラグ解消）
+  try {
+    const cachedEmails = localStorage.getItem('mailextract_emails');
+    if (cachedEmails) {
+      const cached = JSON.parse(cachedEmails);
+      renderEmailList(cached.emails, cached.total, cached.page, cached.pages);
+    }
+  } catch (e) { /* キャッシュ破損は無視 */ }
+
+  // 裏で最新データを取得
   loadAccounts();
   loadEmails();
 }
@@ -1741,6 +1752,10 @@ async function loadEmails(page = 1) {
   try {
     const data = await api(`emails?${params}`);
     renderEmailList(data.emails, data.total, data.page, data.pages);
+    // キャッシュに保存（次回起動時の即時表示用）
+    if (page === 1 && !accountId) {
+      try { localStorage.setItem('mailextract_emails', JSON.stringify(data)); } catch (e) {}
+    }
   } catch (err) {
     if (err.message.includes('認証')) {
       logout();
