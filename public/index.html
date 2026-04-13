@@ -1373,15 +1373,42 @@ if (authToken && currentUser) {
 // ============================
 // セクション切り替え
 // ============================
-function showSection(name) {
+function showSection(name, pushHistory = true) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item[data-section]').forEach(n => n.classList.remove('active'));
   document.getElementById(name + 'Section').classList.add('active');
   document.querySelector(`.nav-item[data-section="${name}"]`).classList.add('active');
 
+  // 履歴にプッシュ（PWAの「戻る」でアプリが閉じないようにする）
+  if (pushHistory) {
+    history.pushState({ section: name }, '', '#' + name);
+  }
+  currentSection = name;
+
   if (name === 'documents') loadDocuments();
   if (name === 'settings') loadAccounts();
 }
+let currentSection = 'inbox';
+
+// 「戻る」ボタンのハンドリング（PWA対応）
+window.addEventListener('popstate', (e) => {
+  if (e.state && e.state.section) {
+    showSection(e.state.section, false);
+  } else if (e.state && e.state.emailId) {
+    // メール詳細から戻る → メール詳細を閉じる
+    const pane = document.getElementById('emailPreview');
+    pane.classList.remove('has-email');
+    pane.innerHTML = '<div class="email-empty"><div class="email-empty-icon">✉️</div><div class="email-empty-text">メールを選択してください</div></div>';
+    currentEmailId = null;
+  } else {
+    // 最初のページ → 受信箱に戻る（アプリを閉じない）
+    showSection('inbox', false);
+    // もう一度戻ると閉じる
+    history.pushState({ section: 'inbox' }, '', '#inbox');
+  }
+});
+// 初期状態を履歴に設定
+history.replaceState({ section: 'inbox' }, '', '#inbox');
 
 // ============================
 // アカウント管理
@@ -1782,6 +1809,9 @@ function renderEmailList(emails, total, page, pages) {
 // ============================
 async function selectEmail(emailId) {
   currentEmailId = emailId;
+
+  // 履歴にプッシュ（メール詳細から「戻る」で一覧に戻れるようにする）
+  history.pushState({ section: currentSection, emailId }, '', '#email-' + emailId);
 
   // 一覧のアクティブ状態を更新
   document.querySelectorAll('.email-item').forEach(el => el.classList.remove('active'));
