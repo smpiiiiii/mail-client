@@ -10,6 +10,7 @@
 const { getRedis, getUser, decrypt, callGemini, cors, genId } = require('./helpers');
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const pdfParse = require('pdf-parse');
 
 // 最大60秒
 module.exports.maxDuration = 60;
@@ -156,9 +157,10 @@ module.exports = async (req, res) => {
         const fromName = fromAddr.name || '';
         const toAddr = env.to && env.to[0] ? env.to[0] : {};
 
-        // mailparserで本文をパース（日本語対応）
+        // mailparserで本文+添付PDFをパース（日本語対応）
         let bodyText = '';
         let bodyPreview = '';
+        let pdfText = '';
         if (msg.source) {
           try {
             const parsed = await simpleParser(msg.source);
@@ -167,10 +169,30 @@ module.exports = async (req, res) => {
               bodyText = parsed.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
             }
             bodyPreview = bodyText.substring(0, 200);
+
+            // PDF添付ファイルからテキスト抽出
+            if (parsed.attachments && parsed.attachments.length > 0) {
+              for (const att of parsed.attachments) {
+                if (att.contentType === 'application/pdf' && att.content && att.size < 2 * 1024 * 1024) {
+                  try {
+                    const pdf = await pdfParse(att.content);
+                    if (pdf.text) {
+                      pdfText += `\n[添付PDF: ${att.filename || 'file.pdf'}]\n${pdf.text.substring(0, 5000)}\n`;
+                      console.log(`📎 PDF抽出: ${att.filename} (${Math.round(att.size/1024)}KB, ${pdf.text.length}文字)`);
+                    }
+                  } catch (pdfErr) {
+                    console.log(`PDF解析スキップ: ${att.filename} - ${pdfErr.message}`);
+                  }
+                }
+              }
+            }
           } catch (parseErr) {
             console.error(`メール解析エラー (UID:${msg.uid}):`, parseErr.message);
           }
         }
+
+        // メール本文 + PDF内容を結合（AI抽出用）
+        const fullText = pdfText ? (bodyText + pdfText).substring(0, 12000) : bodyText;
 
         const subject = env.subject || '(件名なし)';
 
@@ -202,9 +224,9 @@ module.exports = async (req, res) => {
         synced++;
 
         // === AI抽出（取込と同時に実行） ===
-        if (geminiKey && bodyText) {
+        if (geminiKey && (bodyText || pdfText)) {
           try {
-            const prompt = buildBodyPrompt(subject, fromText, bodyText);
+            const prompt = buildBodyPrompt(subject, fromText, fullText);
             const result = await callGemini(geminiKey, prompt);
 
             if (result && result.type !== 'none') {
