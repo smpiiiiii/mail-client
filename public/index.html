@@ -1009,6 +1009,38 @@
             <div class="form-row">
               <label class="label">パスワード（アプリパスワード推奨）</label>
               <input class="input" type="password" id="addPassword" placeholder="アプリパスワード">
+              <details style="margin-top:6px;font-size:0.82rem;color:var(--text-secondary);background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:0;">
+                <summary style="cursor:pointer;padding:10px 14px;font-weight:600;color:var(--accent-light);user-select:none;">
+                  📖 Gmailアプリパスワードの取得方法
+                </summary>
+                <div style="padding:4px 14px 14px;line-height:1.7;">
+                  <p style="margin:8px 0 4px;font-weight:600;color:var(--text-primary);">⚠️ 通常のGmailパスワードでは接続できません</p>
+                  <p style="margin:0 0 12px;">Googleの「アプリパスワード」が必要です。以下の手順で取得してください：</p>
+                  
+                  <div style="background:var(--bg-main);border-radius:6px;padding:12px;margin-bottom:8px;">
+                    <p style="margin:0 0 6px;font-weight:600;">Step 1: 2段階認証をONにする</p>
+                    <a href="https://myaccount.google.com/security" target="_blank" rel="noopener" 
+                       style="color:var(--accent);text-decoration:underline;">
+                      → Google セキュリティ設定を開く
+                    </a>
+                    <p style="margin:4px 0 0;font-size:0.78rem;color:var(--text-muted);">「2段階認証プロセス」をONにしてください（既にONなら次へ）</p>
+                  </div>
+
+                  <div style="background:var(--bg-main);border-radius:6px;padding:12px;margin-bottom:8px;">
+                    <p style="margin:0 0 6px;font-weight:600;">Step 2: アプリパスワードを生成する</p>
+                    <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener"
+                       style="color:var(--accent);text-decoration:underline;">
+                      → アプリパスワード生成ページを開く
+                    </a>
+                    <p style="margin:4px 0 0;font-size:0.78rem;color:var(--text-muted);">アプリ名に「MailExtract」と入力して「作成」をクリック</p>
+                  </div>
+
+                  <div style="background:var(--bg-main);border-radius:6px;padding:12px;">
+                    <p style="margin:0 0 6px;font-weight:600;">Step 3: 表示されたパスワードをコピー</p>
+                    <p style="margin:0;font-size:0.78rem;color:var(--text-muted);">16文字のパスワード（例: abcd efgh ijkl mnop）を上の欄に貼り付けてください。スペースはあってもなくてもOKです。</p>
+                  </div>
+                </div>
+              </details>
             </div>
             <div class="form-row">
               <label class="label">IMAPホスト</label>
