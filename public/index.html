@@ -2045,7 +2045,7 @@ function renderDocTable(documents) {
   }
 
   tbody.innerHTML = documents.map(doc => `
-    <tr>
+    <tr onclick="jumpToEmail('${doc.emailId}')" style="cursor:pointer;" title="クリックでメールを表示">
       <td><span class="badge ${doc.type === '請求書' ? 'badge-invoice' : 'badge-receipt'}">${doc.type}</span></td>
       <td style="font-weight:500;">${escapeHtml(doc.vendor || '不明')}</td>
       <td>${doc.date || '-'}</td>
@@ -2056,6 +2056,13 @@ function renderDocTable(documents) {
       <td><span class="badge ${doc.confidence >= 0.8 ? 'badge-high' : doc.confidence >= 0.5 ? 'badge-mid' : 'badge-low'}">${(doc.confidence * 100).toFixed(0)}%</span></td>
     </tr>
   `).join('');
+}
+
+// 書類行クリック → 受信箱のメールを開く
+function jumpToEmail(emailId) {
+  if (!emailId) return;
+  showSection('inbox');
+  selectEmail(emailId);
 }
 
 async function exportCSV() {
